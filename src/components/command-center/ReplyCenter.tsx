@@ -1,9 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { TONE_PRESETS } from "@/lib/constants";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExternalLinkIcon } from "@/components/ui/icons";
+import { useEmails } from "@/hooks/useEmails";
+import { useTasks } from "@/hooks/useTasks";
 
 interface ReplyItem {
   id: string;
@@ -11,6 +13,7 @@ interface ReplyItem {
   subject: string;
   sender: string;
   daysAgo: number;
+  receivedAt?: string;
   url: string;
   tags: string[];
   context: string;
@@ -18,20 +21,19 @@ interface ReplyItem {
 }
 
 
-const DEMO_REPLIES: ReplyItem[] = [
-  { id: "r1", channel: "email", subject: "RE: Sonance Q3 Dealer Program", sender: "Mike Thornton", daysAgo: 2, url: "#", tags: ["REPLY", "FINANCIAL"], context: "Mike asking about Q3 dealer program updates and pricing changes.", message: "Hi Ari,\n\nFollowing up on our conversation last week — do you have the updated Q3 dealer program details? We need to finalize pricing for the new Sonance lineup before the June 1 deadline.\n\nAlso, any update on the co-op marketing funds allocation? A few of our top dealers have been asking.\n\nThanks,\nMike" },
-  { id: "r2", channel: "email", subject: "NPI v. Dana — Claim Construction Ruling", sender: "Sarah Chen (Legal)", daysAgo: 38, url: "#", tags: ["REPLY", "LEGAL"], context: "Legal team needs direction on patent claim construction ruling.", message: "Ari,\n\nThe court issued the claim construction ruling in NPI v. Dana yesterday. The ruling is mixed — we got favorable construction on claims 1-3 but unfavorable on claim 7 (the dependent claim covering the mounting bracket assembly).\n\nWe need your input on whether to proceed to trial or explore settlement. The trial is currently set for September. Legal fees through trial are estimated at $800K-$1.2M.\n\nPlease advise on preferred direction so we can respond to opposing counsel by next Friday.\n\nBest,\nSarah" },
-  { id: "r3", channel: "email", subject: "EP Wealth Tax Season — MThornton", sender: "Mark Thornton (EP Wealth)", daysAgo: 42, url: "#", tags: ["REPLY", "FINANCIAL"], context: "Tax advisor needs signatures and decisions on estimated payments.", message: "Hi Ari,\n\nHope you're doing well. A few items that need your attention for the tax season:\n\n1. We need your signature on the K-1 extensions by April 15\n2. Q2 estimated tax payments — I'm recommending we increase the federal estimate to $145K based on the projected Sonance distribution\n3. The Roth conversion window — we discussed doing a backdoor Roth contribution. Need your go-ahead to proceed\n\nCan you give me a call this week? Happy to walk through everything.\n\nBest,\nMark" },
-  { id: "r4", channel: "teams", subject: "Cortex MCP for Claude", sender: "Jeana Ceglia", daysAgo: 0, url: "#", tags: ["REPLY", "ACTION"], context: "Jeana wants to discuss integrating Cortex with Claude MCP server.", message: "Hey Ari — just saw the Cortex MCP integration docs. I think we could use this to connect Claude directly to our Salesforce data and internal docs. Want me to set up a proof of concept? I'd need access to the Claude API key and about 2 days to prototype it." },
-  { id: "r5", channel: "teams", subject: "Build from SCRATCH?", sender: "Derick Dahl", daysAgo: 0, url: "#", tags: ["REPLY", "URGENT"], context: "Derick questioning whether to rebuild the dealer portal from scratch.", message: "Ari — I know we talked about iterating on the existing dealer portal, but honestly the tech debt is killing us. Every feature takes 3x longer than it should. The React Native app is on an unsupported version and the API layer is a mess.\n\nI think we should seriously consider a full rebuild. I can have a proposal with timeline and cost ready by EOW. Thoughts?" },
-  { id: "r6", channel: "slack", subject: "Christine Crain — Patron decision", sender: "Christine Crain", daysAgo: 0, url: "#", tags: ["REPLY"], context: "Christine asking about patron event replacement since Steve was vetoed.", message: "Hey Ari — quick question. Steve was on the list for the patron spot at the gala but Scott vetoed, says he's not social enough for that kind of event. Do you have a replacement in mind? We need to confirm by Thursday." },
-  { id: "r7", channel: "slack", subject: "David Stark — QNAP install Monday", sender: "David Stark", daysAgo: 0, url: "#", tags: ["REPLY", "ACTION"], context: "David wants to install new QNAP on Monday.", message: "Hey! The new QNAP arrived. I'd like to come by Monday to install it and migrate everything over from the old Synology. Should take about 4 hours. Does Monday morning work? Also — should I coordinate with Christina on the network config?" },
-  { id: "r8", channel: "email", subject: "Locauto Rental Damage €330", sender: "Locauto Support", daysAgo: 14, url: "#", tags: ["REPLY", "FINANCIAL"], context: "Rental company claiming €330 in damage charges from Italy trip.", message: "Dear Mr. Supran,\n\nFollowing your rental agreement #IT-2024-38291, our inspection team has identified damage to the front bumper of the vehicle (Fiat 500, plate EM 429 XL).\n\nThe repair cost is estimated at €330. As per the rental agreement, this amount will be charged to the credit card on file unless disputed within 14 days.\n\nPlease find attached the damage report and photos.\n\nRegards,\nLocauto Customer Service" },
-  { id: "r9", channel: "asana", subject: "Compensation decisions finalization", sender: "HR / Asana", daysAgo: 6, url: "#", tags: ["URGENT", "ACTION"], context: "Overdue: finalize compensation decisions for leadership team." },
-  { id: "r10", channel: "email", subject: "AI Article Forward — Scott (WRV)", sender: "Scott Wheeler", daysAgo: 5, url: "#", tags: ["REPLY"], context: "Scott forwarded an AI article and wants your take.", message: "Ari — saw this piece in HBR about AI in manufacturing distribution. Thought of our conversation about using AI for demand forecasting. Worth a read.\n\nWhat's your take? Think there's something here for Sonance?\n\n-Scott" },
-  { id: "r11", channel: "asana", subject: "SLT self evaluations", sender: "HR / Asana", daysAgo: 8, url: "#", tags: ["ACTION"], context: "Senior Leadership Team self evaluations are overdue." },
-  { id: "r12", channel: "slack", subject: "Travis Leo — Claude Excel/PPT auth", sender: "Travis Leo", daysAgo: 0, url: "#", tags: ["REPLY", "ACTION"], context: "Travis can't install Claude Excel/PPT plugins, auth broken.", message: "Hey Ari — I've been trying to get the Claude plugins working for Excel and PowerPoint but the authentication keeps failing. We're on GoDaddy-hosted O365 and it seems like the Microsoft Marketplace auth flow doesn't work right with our setup. Any ideas? Travis from Cinergy is having the same issue." },
-];
+function formatReceivedAt(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) {
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' });
+  }
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' });
+}
 
 const CHANNEL_COLORS: Record<string, string> = {
   email: "tag-email",
@@ -54,11 +56,47 @@ function ageBadgeClass(days: number) {
   return "bg-[var(--tab-bg)] text-text-muted";
 }
 
-interface ReplyCenterProps {
-  items?: ReplyItem[];
-}
+export function ReplyCenter() {
+  const { emails } = useEmails();
+  const { tasks } = useTasks();
 
-export function ReplyCenter({ items = DEMO_REPLIES }: ReplyCenterProps) {
+  const items: ReplyItem[] = useMemo(() => {
+    const emailItems: ReplyItem[] = emails
+      .filter((e) => !e.is_read)
+      .slice(0, 10)
+      .map((e) => {
+        const receivedAt = e.received_at;
+        const daysAgo = Math.floor((Date.now() - new Date(receivedAt).getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          id: e.id,
+          channel: 'email',
+          subject: e.subject,
+          sender: e.from_name || e.from_email,
+          daysAgo,
+          receivedAt,
+          url: e.outlook_url || '#',
+          tags: ['REPLY'],
+          context: e.preview || '',
+          message: e.preview || '',
+        };
+      });
+
+    const taskItems: ReplyItem[] = tasks
+      .filter((t) => !t.completed && t.days_overdue > 0)
+      .slice(0, 5)
+      .map((t) => ({
+        id: t.id,
+        channel: 'asana',
+        subject: t.name,
+        sender: 'Asana',
+        daysAgo: t.days_overdue,
+        url: t.permalink_url || '#',
+        tags: t.days_overdue >= 7 ? ['URGENT', 'ACTION'] : ['ACTION'],
+        context: t.notes || `Due ${t.due_on || 'overdue'}`,
+      }));
+
+    return [...emailItems, ...taskItems];
+  }, [emails, tasks]);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [activeDrafts, setActiveDrafts] = useState<Record<string, string>>({});
@@ -242,7 +280,15 @@ export function ReplyCenter({ items = DEMO_REPLIES }: ReplyCenterProps) {
                       </span>
                     ))}
                   </div>
-                  <div className="text-xs text-text-muted">{item.sender}</div>
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    <span>{item.sender}</span>
+                    {item.receivedAt && (
+                      <>
+                        <span className="opacity-30">·</span>
+                        <span className="tabular-nums">{formatReceivedAt(item.receivedAt)}</span>
+                      </>
+                    )}
+                  </div>
 
                   {/* Expanded original message */}
                   {isExpanded && item.message && (
