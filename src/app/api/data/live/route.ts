@@ -28,12 +28,15 @@ async function fetchEmails(token: string) {
     `inferenceClassification eq 'focused' and isDraft eq false and receivedDateTime ge ${since}`
   );
   const res = await fetch(
-    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}&$orderby=receivedDateTime desc`,
+    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const data = await res.json();
   const now = new Date().toISOString();
-  return (data.value ?? []).map((m: Record<string, unknown>) => {
+  const sorted = (data.value ?? []).sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+    new Date(b.receivedDateTime as string).getTime() - new Date(a.receivedDateTime as string).getTime()
+  );
+  return sorted.map((m: Record<string, unknown>) => {
     const from = m.from as { emailAddress: { name: string; address: string } };
     const receivedAt = m.receivedDateTime as string;
     const daysDiff = Math.floor((Date.now() - new Date(receivedAt).getTime()) / (1000 * 60 * 60 * 24));
