@@ -23,7 +23,9 @@ export function usePriorityScore() {
     const NOISE_SENDERS = /noreply|no-reply|newsletter|marketing|notification|donotreply|mailer|linkedin|twitter|digest|promo|offer|deal/i;
 
     for (const email of emails) {
-      if (email.is_read) continue;
+      // Skip read emails older than 3 days — already handled
+      const receivedDaysAgoCheck = Math.floor((Date.now() - new Date(email.received_at).getTime()) / (1000 * 60 * 60 * 24));
+      if (email.is_read && receivedDaysAgoCheck > 3) continue;
       if (NOISE_SENDERS.test(email.from_email || '') || NOISE_SENDERS.test(email.from_name || '')) continue;
 
       const subject = email.subject?.toLowerCase() || '';
@@ -37,15 +39,16 @@ export function usePriorityScore() {
       // Base priority: internal Sonance emails rank higher; recent emails rank higher
       const recencyBonus = receivedDaysAgo === 0 ? 10 : receivedDaysAgo === 1 ? 5 : 0;
       const basePriority = (isFromSonance ? 30 : 22) + recencyBonus;
+      const isUnread = !email.is_read;
 
       priorityItems.push({
         title: email.subject,
         source: 'email',
         url: email.outlook_url,
-        daysOverdue: Math.max(0, receivedDaysAgo - 1),
-        needsReply: true,
+        daysOverdue: isUnread ? Math.max(0, receivedDaysAgo - 1) : 0,
+        needsReply: isUnread,
         urgent: isUrgent,
-        requiresAction: true,
+        requiresAction: isUnread,
         multiplePeopleWaiting: false,
         hardDeadlineWithin7: false,
         financial: isFinancial,

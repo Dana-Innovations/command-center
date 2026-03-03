@@ -62,8 +62,13 @@ export function ReplyCenter() {
 
   const items: ReplyItem[] = useMemo(() => {
     const emailItems: ReplyItem[] = emails
-      .filter((e) => !e.is_read)
-      .slice(0, 10)
+      .filter((e) => {
+        if (!e.is_read) return true;
+        // Also show read emails from the last 3 days as context
+        const daysAgo = Math.floor((Date.now() - new Date(e.received_at).getTime()) / (1000 * 60 * 60 * 24));
+        return daysAgo <= 3;
+      })
+      .slice(0, 12)
       .map((e) => {
         const receivedAt = e.received_at;
         const daysAgo = Math.floor((Date.now() - new Date(receivedAt).getTime()) / (1000 * 60 * 60 * 24));
