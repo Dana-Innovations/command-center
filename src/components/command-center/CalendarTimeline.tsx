@@ -75,14 +75,19 @@ export function CalendarTimeline({ events = [] }: CalendarTimelineProps) {
               <div className="text-xs text-text-muted w-[140px] shrink-0 pt-0.5">{ev.time}</div>
               {/* Info */}
               <div className="min-w-0 flex-1">
-                <a
-                  className="hot-link text-sm font-medium"
-                  href={ev.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {ev.title}
-                </a>
+                <div className="flex items-center gap-1.5">
+                  <a
+                    className="hot-link text-sm font-medium"
+                    href={ev.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {ev.title}
+                  </a>
+                  {currentH >= ev.startH && currentH < ev.endH && (
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Happening now">●</span>
+                  )}
+                </div>
                 <div className="text-xs text-text-muted">{ev.meta}</div>
 
                 {/* Overlay event */}

@@ -14,6 +14,7 @@ import {
   Filler,
 } from "chart.js";
 import { Bar, Line, Doughnut, Pie } from "react-chartjs-2";
+import { usePriorityScore } from "@/hooks/usePriorityScore";
 
 ChartJS.register(
   CategoryScale,
@@ -43,6 +44,22 @@ const chartTextColor = "#B8B8B8";
 const gridColor = "rgba(255,255,255,0.06)";
 
 export function TrendsView() {
+  const { items } = usePriorityScore();
+  const counts = { 
+    email: items.filter(i => i.source === 'email').length,
+    asana: items.filter(i => i.source === 'asana').length,
+    teams: items.filter(i => i.source === 'teams').length,
+    slack: items.filter(i => i.source === 'slack').length,
+    salesforce: items.filter(i => i.source === 'salesforce').length,
+  };
+
+  const scoreBands = {
+    "90-100": items.filter(i => ((i as any).displayScore ?? 0) >= 90).length,
+    "70-89": items.filter(i => ((i as any).displayScore ?? 0) >= 70 && ((i as any).displayScore ?? 0) < 90).length,
+    "50-69": items.filter(i => ((i as any).displayScore ?? 0) >= 50 && ((i as any).displayScore ?? 0) < 70).length,
+    "Below 50": items.filter(i => ((i as any).displayScore ?? 0) < 50).length,
+  };
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -55,7 +72,7 @@ export function TrendsView() {
                 labels: ["90\u2013100 (Critical)", "70\u201389 (High)", "50\u201369 (Medium)", "Below 50 (Low)"],
                 datasets: [{
                   label: "Items",
-                  data: [SCORE_BANDS["90-100"], SCORE_BANDS["70-89"], SCORE_BANDS["50-69"], SCORE_BANDS["Below 50"]],
+                  data: [scoreBands["90-100"], scoreBands["70-89"], scoreBands["50-69"], scoreBands["Below 50"]],
                   backgroundColor: [
                     "rgba(232,93,93,0.75)",
                     "rgba(212,164,76,0.75)",
@@ -201,9 +218,15 @@ export function TrendsView() {
           <div className="h-[250px] flex items-center justify-center">
             <Pie
               data={{
-                labels: ["Asana (12)", "Email (8)", "Salesforce (8)", "Teams (2)", "Slack (3)"],
+                labels: [
+                  `Asana (${counts.asana})`,
+                  `Email (${counts.email})`,
+                  `Salesforce (${counts.salesforce})`,
+                  `Teams (${counts.teams})`,
+                  `Slack (${counts.slack})`
+                ],
                 datasets: [{
-                  data: [12, 8, 8, 2, 3],
+                  data: [counts.asana, counts.email, counts.salesforce, counts.teams, counts.slack],
                   backgroundColor: [
                     "rgba(232,93,93,0.75)",
                     "rgba(212,164,76,0.75)",

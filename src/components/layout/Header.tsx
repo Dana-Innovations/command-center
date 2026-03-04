@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SyncIndicator } from "@/components/ui/SyncIndicator";
 import { CommandBar, type CommandItem } from "@/components/ui/CommandBar";
 import { useAuth } from "@/hooks/useAuth";
+import { useLiveData } from "@/lib/live-data-context";
 
 interface HeaderProps {
   onRefresh?: () => void;
@@ -22,6 +23,7 @@ export function Header({
   commandItems = [],
 }: HeaderProps) {
   const { user, signOut } = useAuth();
+  const { loading, error } = useLiveData();
   const [greeting, setGreeting] = useState("");
   const [dateStr, setDateStr] = useState("");
   const [clock, setClock] = useState("");
@@ -93,7 +95,16 @@ export function Header({
 
         {/* Right: controls */}
         <div className="header-controls flex items-center gap-2">
-          <SyncIndicator isSyncing={isSyncing} lastSyncedAt={lastSyncedAt} syncError={syncError} />
+          <div className="flex items-center gap-1.5 mr-2">
+            <div 
+              className={`w-2 h-2 rounded-full ${
+                loading ? "bg-amber-400 animate-pulse" : 
+                error ? "bg-red-500" : "bg-green-500"
+              }`}
+              title={loading ? "Syncing..." : error ? `Error: ${error}` : "Data live"}
+            />
+            <SyncIndicator isSyncing={isSyncing} lastSyncedAt={lastSyncedAt} syncError={syncError} />
+          </div>
 
           {/* Search */}
           <Button

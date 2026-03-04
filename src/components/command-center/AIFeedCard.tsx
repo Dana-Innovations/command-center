@@ -38,7 +38,7 @@ function linkify(text: string): React.ReactNode[] {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="hot-link text-xs break-all"
+        className="hot-link text-sm break-all"
       >
         {displayLabel}
       </a>
@@ -126,7 +126,7 @@ export function AIFeedCard() {
                     )}
                   </div>
                   {msg.text && (
-                    <p className="text-xs text-text-body leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-sm text-text-body leading-relaxed whitespace-pre-wrap break-words mt-1">
                       {linkify(msg.text)}
                     </p>
                   )}

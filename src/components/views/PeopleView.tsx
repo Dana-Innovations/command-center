@@ -42,9 +42,10 @@ const TIER_CONFIG = [
 
 interface PeopleViewProps {
   people?: Person[];
+  loading?: boolean;
 }
 
-export function PeopleView({ people = [] }: PeopleViewProps) {
+export function PeopleView({ people = [], loading = false }: PeopleViewProps) {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   function toggleExpand(name: string) {
@@ -70,7 +71,12 @@ export function PeopleView({ people = [] }: PeopleViewProps) {
 
   return (
     <div className="space-y-6">
-      {people.length === 0 ? (
+      {people.length === 0 && loading ? (
+        <div className="flex items-center justify-center p-6 rounded-lg bg-[var(--tab-bg)] text-text-muted animate-pulse">
+          <span className="mr-2">👥</span>
+          <span>Loading contacts from Outlook & Calendar...</span>
+        </div>
+      ) : people.length === 0 ? (
         <EmptyState />
       ) : (
       <>
@@ -98,7 +104,7 @@ export function PeopleView({ people = [] }: PeopleViewProps) {
             <div className="flex items-center gap-2">
               <div className={cn("w-2.5 h-2.5 rounded-full", `bg-${tier.key === "red" ? "accent-red" : tier.key === "amber" ? "accent-amber" : tier.key === "teal" ? "accent-teal" : "[#555]"}`)} />
               <h3 className={cn("text-sm font-semibold", tier.color)}>{tier.label}</h3>
-              <span className="text-xs text-text-muted">{group.length}</span>
+              <span className="ml-1.5 text-xs bg-white/10 rounded-full px-2 py-0.5 text-text-muted">{group.length}</span>
             </div>
 
             <div className={cn(

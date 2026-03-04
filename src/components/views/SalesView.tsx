@@ -291,6 +291,14 @@ export function SalesView() {
 
   return (
     <div className="space-y-5">
+      {openOpps.length === 0 && (
+        <div className="glass-card p-6 text-center">
+          <div className="text-2xl mb-2">📊</div>
+          <div className="text-sm font-semibold text-text-heading mb-1">Salesforce not connected</div>
+          <div className="text-xs text-text-muted">OAuth token required for server-side access. Contact IT to configure.</div>
+        </div>
+      )}
+      
       {/* ── Section A: KPI Hero Row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Total Open Pipeline" value={fmt$(totalPipeline)} color="text-[#0070D2]" />

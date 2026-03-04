@@ -101,7 +101,12 @@ export function TimelineView() {
   const nowY = showNow ? timeToY(Math.floor(currentH), Math.round((currentH % 1) * 60)) : 0;
 
   return (
-    <div className="flex gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-amber-400/10 border border-amber-400/20 text-xs text-amber-400">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Timeline uses demo data — live calendar sync coming soon
+      </div>
+      <div className="flex gap-4">
       {/* Hour labels */}
       <div className="shrink-0 w-16 relative" style={{ height: totalHeight }}>
         {hours.map((h) => (
@@ -193,6 +198,7 @@ export function TimelineView() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

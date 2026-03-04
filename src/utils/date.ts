@@ -7,9 +7,11 @@ export function getGreeting(): string {
   });
   const hour = parseInt(pstStr, 10);
 
-  if (hour < 12) return 'Good morning, Ari.';
-  if (hour < 17) return 'Good afternoon, Ari.';
-  return 'Good evening, Ari.';
+  let greet = 'Good morning';
+  if (hour >= 12 && hour < 17) greet = 'Good afternoon';
+  else if (hour >= 17) greet = 'Good evening';
+
+  return `${greet}, Ari`;
 }
 
 export function getFormattedDate(): string {
