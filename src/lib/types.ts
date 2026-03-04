@@ -153,6 +153,7 @@ export interface SlackFeedMessage {
   author_id: string | null;
   text: string | null;
   timestamp: string;
+  channel_name: string;
   reactions: { name: string; count: number }[];
   thread_reply_count: number;
   has_files: boolean;

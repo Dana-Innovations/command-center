@@ -14,11 +14,11 @@ const CATEGORY_ORDER = ["revenue", "operations", "growth"];
 function formatValue(value: number | null, unit: string): string {
   if (value === null) return "—";
   if (unit === "$") {
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-    if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
+    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}m`;
+    if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+    return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   }
-  if (unit === "%") return `${value.toFixed(1)}%`;
+  if (unit === "%") return `${Math.round(value)}%`;
   if (unit === "#") {
     if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
     return value.toFixed(0);

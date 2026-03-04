@@ -121,8 +121,8 @@ export function usePeople() {
       if (!name || shouldExclude(name, addr)) continue;
 
       const daysAgo = Math.floor((now - new Date(email.received_at).getTime()) / 86400000);
-      const isUnread = !email.is_read;
-      const urgencyLevel = isUnread ? (daysAgo >= 3 ? 3 : daysAgo >= 1 ? 2 : 1) : 0;
+      // Recency-based urgency: amber if within 24h, teal if within 7d, gray otherwise
+      const urgencyLevel = daysAgo < 1 ? 2 : daysAgo < 7 ? 1 : 0;
 
       upsert(name, addr, {
         ch: 'email',

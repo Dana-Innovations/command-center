@@ -389,7 +389,7 @@ export function ReplyCenter() {
                           <div className="text-[10px] text-accent-red mb-2">Send failed: {sendError}</div>
                         )}
                         {isSent ? (
-                          <div className="text-xs text-accent-teal font-medium">✓ Sent!</div>
+                          <div className="text-xs text-accent-teal font-medium">✓ Drafted — check Outlook</div>
                         ) : (
                           <div className="flex gap-2 flex-wrap">
                             {item.channel === 'email' && (
@@ -404,7 +404,7 @@ export function ReplyCenter() {
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                                     </svg>
-                                    Send Reply
+                                    Draft Reply
                                   </>
                                 )}
                               </button>

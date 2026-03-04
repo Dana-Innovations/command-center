@@ -53,31 +53,22 @@ export async function POST(req: NextRequest) {
         }),
       });
 
-      // Send it
-      const sendRes = await fetch(
-        `https://graph.microsoft.com/v1.0/me/messages/${draft.id}/send`,
-        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!sendRes.ok) throw new Error(`send failed: ${sendRes.status}`);
-
-      return NextResponse.json({ ok: true, sent: true });
+      return NextResponse.json({ ok: true, drafted: true });
     }
 
-    // Fallback: send a new message to a specific address
+    // Fallback: create a draft to a specific address
     if (toEmail) {
-      const sendRes = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+      const draftRes = await fetch('https://graph.microsoft.com/v1.0/me/messages', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: {
-            subject: subject || '(no subject)',
-            body: { contentType: 'Text', content: body },
-            toRecipients: [{ emailAddress: { address: toEmail, name: toName || toEmail } }],
-          },
+          subject: subject || '(no subject)',
+          body: { contentType: 'Text', content: body },
+          toRecipients: [{ emailAddress: { address: toEmail, name: toName || toEmail } }],
         }),
       });
-      if (!sendRes.ok) throw new Error(`sendMail failed: ${sendRes.status}`);
-      return NextResponse.json({ ok: true, sent: true });
+      if (!draftRes.ok) throw new Error(`createDraft failed: ${draftRes.status}`);
+      return NextResponse.json({ ok: true, drafted: true });
     }
 
     return NextResponse.json({ error: 'No messageId or toEmail provided' }, { status: 400 });

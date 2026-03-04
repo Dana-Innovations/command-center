@@ -58,7 +58,7 @@ function EventCard({ ev, now }: { ev: CalendarEvent; now: Date }) {
         <div className="text-sm font-medium text-text-heading mt-0.5">{ev.subject}</div>
         {ev.location && <div className="text-xs text-text-muted mt-0.5">{ev.location}</div>}
       </div>
-      {ev.join_url && (
+      {ev.join_url && ev.is_online && (
         <a
           href={ev.join_url}
           target="_blank"
@@ -166,36 +166,49 @@ export function CalendarView() {
             Upcoming
           </h2>
           <div className="space-y-2">
-            {upcoming.slice(0, 10).map((ev) => {
-              const start = toPST(ev.start_time);
-              const dateLabel = start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-              return (
-                <div key={ev.id} className="glass-card p-3 flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-text-muted shrink-0">
-                        {dateLabel}
-                      </span>
-                      <span className="text-xs text-text-muted tabular-nums">
-                        {ev.is_all_day ? "All day" : formatTimeRange(ev)}
-                      </span>
-                    </div>
-                    <div className="text-sm font-medium text-text-heading mt-0.5">{ev.subject}</div>
-                    {ev.location && <div className="text-xs text-text-muted mt-0.5">{ev.location}</div>}
+            {(() => {
+              const grouped: { label: string; events: typeof upcoming }[] = [];
+              for (const ev of upcoming.slice(0, 10)) {
+                const start = toPST(ev.start_time);
+                const label = start.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+                const last = grouped[grouped.length - 1];
+                if (last && last.label === label) {
+                  last.events.push(ev);
+                } else {
+                  grouped.push({ label, events: [ev] });
+                }
+              }
+              return grouped.map((group) => (
+                <div key={group.label}>
+                  <div className="text-xs font-semibold text-text-heading mt-3 mb-2 first:mt-0">{group.label}</div>
+                  <div className="space-y-2">
+                    {group.events.map((ev) => (
+                      <div key={ev.id} className="glass-card p-3 flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-text-muted tabular-nums">
+                              {ev.is_all_day ? "All day" : formatTimeRange(ev)}
+                            </span>
+                          </div>
+                          <div className="text-sm font-medium text-text-heading mt-0.5">{ev.subject}</div>
+                          {ev.location && <div className="text-xs text-text-muted mt-0.5">{ev.location}</div>}
+                        </div>
+                        {ev.join_url && ev.is_online && (
+                          <a
+                            href={ev.join_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md bg-accent-teal/15 text-accent-teal hover:bg-accent-teal/25 transition-colors"
+                          >
+                            Join
+                          </a>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {ev.join_url && (
-                    <a
-                      href={ev.join_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md bg-accent-teal/15 text-accent-teal hover:bg-accent-teal/25 transition-colors"
-                    >
-                      Join
-                    </a>
-                  )}
                 </div>
-              );
-            })}
+              ));
+            })()}
           </div>
         </section>
       )}
