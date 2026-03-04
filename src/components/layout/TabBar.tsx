@@ -1,7 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 
-export type TabId = "priority" | "sales" | "metrics" | "people" | "calendar" | "signals";
+export type TabId = "priority" | "sales" | "metrics" | "people" | "calendar" | "signals" | "minden";
 
 const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -55,6 +55,16 @@ const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    ),
+  },
+  {
+    id: "minden",
+    label: "Minden",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 20h20" /><path d="M5 20V8l7-5 7 5v12" /><rect x="9" y="12" width="6" height="8" />
+        <line x1="9" y1="8" x2="9" y2="8.01" /><line x1="15" y1="8" x2="15" y2="8.01" />
       </svg>
     ),
   },
