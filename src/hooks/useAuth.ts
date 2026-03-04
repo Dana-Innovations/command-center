@@ -1,17 +1,54 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-/** Single-user demo — hardcoded identity for Ari Supran */
+interface CortexUser {
+  sub: string;
+  name: string;
+  email: string;
+  picture?: string;
+}
+
+function getCortexUserFromCookie(): CortexUser | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/cortex_user=([^;]+)/);
+  if (!match) return null;
+  try {
+    return JSON.parse(decodeURIComponent(match[1]));
+  } catch {
+    return null;
+  }
+}
+
 export function useAuth() {
-  const user = {
-    email: "ari@sonance.com",
-    user_metadata: { full_name: "Ari Supran" },
-  };
+  const [user, setUser] = useState<{
+    email: string;
+    user_metadata: { full_name: string; avatar_url?: string };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const signOut = useCallback(() => {
-    // No-op for demo
+  useEffect(() => {
+    const cortexUser = getCortexUserFromCookie();
+    if (cortexUser) {
+      setUser({
+        email: cortexUser.email,
+        user_metadata: {
+          full_name: cortexUser.name,
+          avatar_url: cortexUser.picture,
+        },
+      });
+    }
+    setLoading(false);
   }, []);
 
-  return { user, loading: false, signOut };
+  const signOut = useCallback(async () => {
+    // POST to signout route which clears cookies and revokes token
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/auth/signout";
+    document.body.appendChild(form);
+    form.submit();
+  }, []);
+
+  return { user, loading, signOut };
 }
