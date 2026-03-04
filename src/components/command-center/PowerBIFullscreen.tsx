@@ -119,8 +119,15 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ note, imageBase64, destination, reportUrl: embedUrl, reportName }),
       });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      let data: Record<string, unknown> = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
+      }
+      if (!res.ok || data.error) throw new Error(String(data.error) || `HTTP ${res.status}`);
       setSent(true);
       setTimeout(() => {
         setSent(false);
@@ -378,7 +385,7 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                 <p className="text-xs text-red-400 mb-2">{sendError}</p>
               )}
               {sent ? (
-                <div className="text-sm text-green-400 font-medium text-center py-2">✓ Sent!</div>
+                <div className="text-sm text-green-400 font-medium text-center py-2">✓ Drafted — check Outlook Drafts</div>
               ) : (
                 <button
                   onClick={handleSend}
@@ -388,7 +395,7 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                   {sending ? (
                     <><span className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> Sending…</>
                   ) : (
-                    <><Send className="w-4 h-4" /> Send Clip</>
+                    <><Send className="w-4 h-4" /> Draft Email</>
                   )}
                 </button>
               )}

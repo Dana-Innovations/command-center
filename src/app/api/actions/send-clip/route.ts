@@ -99,19 +99,21 @@ export async function POST(req: NextRequest) {
         `</div>`,
       ].filter(Boolean).join('');
 
-      const sendRes = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+      const draftRes = await fetch('https://graph.microsoft.com/v1.0/me/messages', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: {
-            subject: `📊 ${reportName || 'Command Center'} Clip · ${timestamp}`,
-            body: { contentType: 'HTML', content: htmlBody },
-            toRecipients: [{ emailAddress: { address: destination.address, name: destination.name || destination.address } }],
-          },
+          subject: `📊 ${reportName || 'Command Center'} Clip · ${timestamp}`,
+          body: { contentType: 'HTML', content: htmlBody },
+          toRecipients: [{ emailAddress: { address: destination.address, name: destination.name || destination.address } }],
         }),
       });
-      if (!sendRes.ok) throw new Error(`Email send failed: ${sendRes.status}`);
-      return NextResponse.json({ ok: true, to: destination.address });
+      if (!draftRes.ok) {
+        const errText = await draftRes.text();
+        throw new Error(`Draft creation failed: ${draftRes.status} - ${errText.slice(0, 100)}`);
+      }
+      const draft = await draftRes.json();
+      return NextResponse.json({ ok: true, drafted: true, to: destination.address, draftId: draft.id });
     }
 
     return NextResponse.json({ error: 'Unknown destination type' }, { status: 400 });
