@@ -150,10 +150,11 @@ export function PowerBIReports() {
                     {embedUrl && (
                       <button
                         onClick={() => setFullscreenReport({ name: report.report_name, url: embedUrl })}
-                        className="p-1.5 rounded hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Fullscreen + Clip"
+                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-accent-amber/40 text-accent-amber hover:bg-accent-amber/10 transition-colors cursor-pointer font-medium"
+                        title="Open fullscreen + clip"
                       >
-                        <Maximize2 className="w-3.5 h-3.5 text-accent-amber" />
+                        <Maximize2 className="w-3 h-3" />
+                        Fullscreen
                       </button>
                     )}
                     <a
@@ -216,7 +217,7 @@ export function PowerBIReports() {
                       <iframe
                         src={embedUrl}
                         className="w-full border-0"
-                        style={{ height: 500 }}
+                        style={{ height: 680 }}
                         allowFullScreen
                         title={report.report_name}
                       />
