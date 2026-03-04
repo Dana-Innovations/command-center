@@ -75,7 +75,7 @@ async function fetchEmails(token: string) {
   // Get 40 most recent focused inbox emails, newest first — no date cutoff
   const filter = encodeURIComponent(`inferenceClassification eq 'focused' and isDraft eq false`);
   const res = await fetch(
-    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}&$orderby=receivedDateTime desc`,
+    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const data = await res.json() as { value?: Record<string, unknown>[] };
