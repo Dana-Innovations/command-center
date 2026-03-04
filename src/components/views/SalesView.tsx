@@ -222,7 +222,16 @@ export function SalesView() {
   }, [openOpps]);
 
   // Unique values for filter dropdowns
-  const uniqueStages = useMemo(() => [...new Set(openOpps.map((o) => o.stage))].sort(), [openOpps]);
+  const uniqueStages = useMemo(() => {
+    // Sort stages by pipeline total descending
+    const stageTotal = new Map<string, number>();
+    openOpps.forEach((o) => {
+      stageTotal.set(o.stage, (stageTotal.get(o.stage) || 0) + (o.amount || 0));
+    });
+    return [...new Set(openOpps.map((o) => o.stage))].sort(
+      (a, b) => (stageTotal.get(b) || 0) - (stageTotal.get(a) || 0)
+    );
+  }, [openOpps]);
   const uniqueTerritories = useMemo(() => [...new Set(openOpps.map((o) => o.territory || "").filter(Boolean))].sort(), [openOpps]);
   const uniqueReps = useMemo(() => [...new Set(openOpps.map((o) => o.owner_name))].sort(), [openOpps]);
   const uniqueChannels = useMemo(() => [...new Set(openOpps.map((o) => o.sales_channel || "").filter(Boolean))].sort(), [openOpps]);
@@ -559,7 +568,7 @@ export function SalesView() {
           </table>
         </div>
         <div className="mt-3 text-[10px] text-text-muted">
-          Showing {filteredDeals.length} of {openOpps.length} open deals
+          {filteredDeals.length} deals &middot; {fmt$(filteredDeals.reduce((s, o) => s + (o.amount || 0), 0))} total
         </div>
       </section>
     </div>

@@ -9,6 +9,17 @@ import { PriorityItem } from '@/lib/types';
 
 const NOISE_SENDERS = /noreply|no-reply|newsletter|marketing|notification|donotreply|mailer|linkedin|twitter|digest|promo|offer|deal|vercel\.com|github\.com/i;
 
+function formatSenderName(fromName: string | undefined, fromEmail: string | undefined): string {
+  const name = fromName || fromEmail || 'Unknown';
+  if (!name.includes('@')) return name;
+  // Name field contains an email address — format local part as Title Case
+  const local = name.split('@')[0] || '';
+  return local
+    .split(/[._-]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function scoreItem(item: PriorityItem): number {
   let s = item.basePriority;
 
@@ -51,14 +62,26 @@ export function usePriorityScore() {
   const items = useMemo(() => {
     const priorityItems: PriorityItem[] = [];
     const seenSubjects = new Set<string>();
+    const seenSenderSubjects = new Set<string>();
+
+    // Sort emails by received_at desc so we keep the most recent per dedup key
+    const sortedEmails = [...emails].sort(
+      (a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
+    );
 
     // ── Emails ────────────────────────────────────────────────────────
-    for (const email of emails) {
+    for (const email of sortedEmails) {
       if (NOISE_SENDERS.test(email.from_email || '') || NOISE_SENDERS.test(email.from_name || '')) continue;
 
       // Deduplicate by thread subject (strip Re:/Fwd: prefixes)
       const rawSubject = email.subject || '';
       const normalizedSubject = rawSubject.toLowerCase().replace(/^(re|fwd|fw):\s*/gi, '').trim();
+
+      // Additional dedup: same sender + same subject → keep most recent only
+      const senderSubjectKey = `${(email.from_email || '').toLowerCase()}::${normalizedSubject}`;
+      if (seenSenderSubjects.has(senderSubjectKey)) continue;
+      seenSenderSubjects.add(senderSubjectKey);
+
       if (seenSubjects.has(normalizedSubject)) continue;
       seenSubjects.add(normalizedSubject);
 
@@ -83,7 +106,7 @@ export function usePriorityScore() {
 
       priorityItems.push({
         title: email.subject,
-        sender: email.from_name || email.from_email,
+        sender: formatSenderName(email.from_name, email.from_email),
         source: 'email',
         url: email.outlook_url,
         daysOverdue: isUnread ? Math.max(0, receivedDaysAgo - 1) : 0,
