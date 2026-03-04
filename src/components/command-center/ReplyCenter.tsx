@@ -61,14 +61,19 @@ export function ReplyCenter() {
   const { tasks } = useTasks();
 
   const items: ReplyItem[] = useMemo(() => {
+    const NOISE = /noreply|no-reply|newsletter|marketing|notification|donotreply|mailer|linkedin|twitter|digest|promo|offer|deal/i;
     const emailItems: ReplyItem[] = emails
       .filter((e) => {
-        if (!e.is_read) return true;
-        // Also show read emails from the last 3 days as context
-        const daysAgo = Math.floor((Date.now() - new Date(e.received_at).getTime()) / (1000 * 60 * 60 * 24));
-        return daysAgo <= 3;
+        if (NOISE.test(e.from_email || '') || NOISE.test(e.from_name || '')) return false;
+        return true; // show all focused inbox emails (Outlook already filtered junk/spam)
       })
-      .slice(0, 12)
+      .sort((a, b) => {
+        // Unread first, then by recency
+        if (!a.is_read && b.is_read) return -1;
+        if (a.is_read && !b.is_read) return 1;
+        return new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
+      })
+      .slice(0, 15)
       .map((e) => {
         const receivedAt = e.received_at;
         const daysAgo = Math.floor((Date.now() - new Date(receivedAt).getTime()) / (1000 * 60 * 60 * 24));

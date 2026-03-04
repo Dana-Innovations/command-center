@@ -23,32 +23,33 @@ export function usePriorityScore() {
     const NOISE_SENDERS = /noreply|no-reply|newsletter|marketing|notification|donotreply|mailer|linkedin|twitter|digest|promo|offer|deal/i;
 
     for (const email of emails) {
-      // Skip read emails older than 3 days — already handled
-      const receivedDaysAgoCheck = Math.floor((Date.now() - new Date(email.received_at).getTime()) / (1000 * 60 * 60 * 24));
-      if (email.is_read && receivedDaysAgoCheck > 3) continue;
+      // Skip noise/automated senders; everything else from Focused Inbox is fair game
       if (NOISE_SENDERS.test(email.from_email || '') || NOISE_SENDERS.test(email.from_name || '')) continue;
+      if (/vercel\.com|github\.com|noreply\./i.test(email.from_email || '')) continue;
 
       const subject = email.subject?.toLowerCase() || '';
       const isFinancial = /invoice|payment|billing|budget|revenue|cost|expense|contract|pricing|tax/.test(subject);
       const isLegal = /legal|lawsuit|litigation|compliance|npi|attorney|counsel|depo|deposition/.test(subject);
       const isUrgent = /urgent|asap|critical|emergency|action required|deadline|time.sensitive/.test(subject);
       const isFromSonance = (email.from_email || '').endsWith('@sonance.com');
+      const isUnread = !email.is_read;
 
       const receivedDaysAgo = Math.floor((Date.now() - new Date(email.received_at).getTime()) / (1000 * 60 * 60 * 24));
 
-      // Base priority: internal Sonance emails rank higher; recent emails rank higher
-      const recencyBonus = receivedDaysAgo === 0 ? 10 : receivedDaysAgo === 1 ? 5 : 0;
-      const basePriority = (isFromSonance ? 30 : 22) + recencyBonus;
-      const isUnread = !email.is_read;
+      // Recency bonus — emails from the last 2 days get boosted
+      const recencyBonus = receivedDaysAgo === 0 ? 15 : receivedDaysAgo === 1 ? 8 : receivedDaysAgo <= 3 ? 3 : 0;
+      // Sonance internal emails rank higher
+      const basePriority = (isFromSonance ? 30 : 20) + recencyBonus;
 
       priorityItems.push({
         title: email.subject,
         source: 'email',
         url: email.outlook_url,
+        // Unread = treat as overdue; read = no overdue penalty
         daysOverdue: isUnread ? Math.max(0, receivedDaysAgo - 1) : 0,
         needsReply: isUnread,
-        urgent: isUrgent,
-        requiresAction: isUnread,
+        urgent: isUrgent || isUnread,  // all unread = needs attention
+        requiresAction: isUnread || isFinancial || isLegal || isUrgent,
         multiplePeopleWaiting: false,
         hardDeadlineWithin7: false,
         financial: isFinancial,
