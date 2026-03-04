@@ -72,10 +72,10 @@ async function getM365Token(): Promise<string> {
 }
 
 async function fetchEmails(token: string) {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const filter = encodeURIComponent(`inferenceClassification eq 'focused' and isDraft eq false and receivedDateTime ge ${since}`);
+  // Get 40 most recent focused inbox emails, newest first — no date cutoff
+  const filter = encodeURIComponent(`inferenceClassification eq 'focused' and isDraft eq false`);
   const res = await fetch(
-    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}`,
+    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=40&$select=id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$filter=${filter}&$orderby=receivedDateTime desc`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const data = await res.json() as { value?: Record<string, unknown>[] };
