@@ -25,7 +25,7 @@ function HomeContent() {
   const [activeTab, setActiveTab] = useState<TabId>("priority");
   const [eodOpen, setEodOpen] = useState(false);
   const { loading, fetchedAt, error, refetch } = useLiveData();
-  const { people } = usePeople();
+  const { people, loading: peopleLoading } = usePeople();
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
@@ -48,7 +48,7 @@ function HomeContent() {
         {activeTab === "priority"  && <PriorityView />}
         {activeTab === "sales"     && <SalesTabView />}
         {activeTab === "metrics"   && <MetricsView />}
-        {activeTab === "people"    && <PeopleView people={people} loading={loading} />}
+        {activeTab === "people"    && <PeopleView people={people} loading={peopleLoading} />}
         {activeTab === "calendar"  && <CalendarView />}
         {activeTab === "signals"   && <SignalsView />}
       </main>
