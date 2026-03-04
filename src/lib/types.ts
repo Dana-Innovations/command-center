@@ -88,6 +88,7 @@ export interface SyncLog {
 
 export interface PriorityItem {
   title: string;
+  sender?: string;
   source: 'email' | 'teams' | 'asana' | 'slack' | 'salesforce';
   url: string;
   daysOverdue: number;

@@ -124,7 +124,7 @@ export function PriorityEngine({ items = [], onJeana }: PriorityEngineProps) {
       ) : (
         <div className="space-y-0 divide-y divide-[var(--bg-card-border)] overflow-y-auto" style={{ maxHeight: 480 }}>
           {filtered.map((item) => (
-            <div key={item.title} className="flex items-start gap-3 py-3">
+            <div key={item.title} className="group flex items-start gap-3 py-3">
               <ScoreBadge score={item.displayScore ?? 0} />
               <span className="shrink-0 text-text-muted mt-0.5">
                 <SourceIcon source={item.source} />
@@ -138,9 +138,16 @@ export function PriorityEngine({ items = [], onJeana }: PriorityEngineProps) {
                 ) : (
                   <div className="text-sm text-text-heading line-clamp-2 leading-snug">{item.title}</div>
                 )}
+                {/* Sender / source subtitle */}
+                {(item as {sender?: string}).sender && (
+                  <div className="text-xs text-text-muted mt-0.5 truncate">
+                    {(item as {sender?: string}).sender}
+                  </div>
+                )}
                 <SignalPills item={item} />
               </div>
-              <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              {/* Action buttons — only visible on row hover */}
+              <div className="flex items-center gap-1 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 {item.source === "asana" && (
                   <button
                     className="text-xs px-2 py-1 rounded-md hover:bg-teal-400/20 text-text-muted hover:text-teal-400 transition-colors cursor-pointer"

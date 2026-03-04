@@ -50,12 +50,19 @@ export function usePriorityScore() {
 
   const items = useMemo(() => {
     const priorityItems: PriorityItem[] = [];
+    const seenSubjects = new Set<string>();
 
     // ── Emails ────────────────────────────────────────────────────────
     for (const email of emails) {
       if (NOISE_SENDERS.test(email.from_email || '') || NOISE_SENDERS.test(email.from_name || '')) continue;
 
-      const subject = (email.subject || '').toLowerCase();
+      // Deduplicate by thread subject (strip Re:/Fwd: prefixes)
+      const rawSubject = email.subject || '';
+      const normalizedSubject = rawSubject.toLowerCase().replace(/^(re|fwd|fw):\s*/gi, '').trim();
+      if (seenSubjects.has(normalizedSubject)) continue;
+      seenSubjects.add(normalizedSubject);
+
+      const subject = rawSubject.toLowerCase();
       const isFinancial = /invoice|payment|billing|budget|revenue|cost|expense|contract|pricing|tax/.test(subject);
       const isLegal = /legal|lawsuit|litigation|compliance|npi|attorney|counsel|depo/.test(subject);
       // Truly urgent = explicit keyword, NOT just "unread"
@@ -76,6 +83,7 @@ export function usePriorityScore() {
 
       priorityItems.push({
         title: email.subject,
+        sender: email.from_name || email.from_email,
         source: 'email',
         url: email.outlook_url,
         daysOverdue: isUnread ? Math.max(0, receivedDaysAgo - 1) : 0,
@@ -90,8 +98,9 @@ export function usePriorityScore() {
       });
     }
 
-    // ── Asana Tasks ───────────────────────────────────────────────────
+    // ── Asana Tasks (incomplete only) ────────────────────────────────
     for (const task of tasks) {
+      if (task.completed) continue;
       const isHighPriority = task.priority === 'high' || task.priority === 'urgent';
       const daysOverdue = task.days_overdue || 0;
       priorityItems.push({
@@ -125,6 +134,7 @@ export function usePriorityScore() {
       // All Teams chats are active conversations — treat as needing attention
       priorityItems.push({
         title,
+        sender: 'Teams',
         source: 'teams',
         url: '',
         daysOverdue: 0,
