@@ -267,6 +267,58 @@ async function fetchSlackMessages(sessionId: string) {
   ).slice(0, 10);
 }
 
+// ─── Cortex: Power BI ────────────────────────────────────────────────────────
+
+const SONANCE_WORKSPACE_ID = '05fd9b2f-5d90-443f-8927-ebc2a507c0d9';
+
+async function fetchPowerBI(sessionId: string) {
+  // Fetch reports and datasets in parallel
+  const [reportsResult, datasetsResult] = await Promise.allSettled([
+    cortexCall(sessionId, 'pbi_reports', 'powerbi__list_reports', { workspace_id: SONANCE_WORKSPACE_ID }),
+    cortexCall(sessionId, 'pbi_datasets', 'powerbi__list_datasets', { workspace_id: SONANCE_WORKSPACE_ID }),
+  ]);
+
+  const reports: Record<string, unknown>[] = (reportsResult.status === 'fulfilled' ? reportsResult.value?.reports : null) ?? [];
+  const datasets: Record<string, unknown>[] = (datasetsResult.status === 'fulfilled' ? datasetsResult.value?.datasets : null) ?? [];
+
+  const now = new Date().toISOString();
+
+  const reportConfigs = reports
+    .filter((r) => r.name && r.id)
+    .map((r, i) => ({
+      id: r.id as string,
+      report_id: r.id as string,
+      report_name: r.name as string,
+      workspace_id: SONANCE_WORKSPACE_ID,
+      embed_url: (r.embedUrl as string) || (r.webUrl as string) || null,
+      description: null,
+      display_order: i,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    }));
+
+  // Build KPI stubs from datasets — actual values would need DAX queries
+  const kpis = datasets
+    .filter((d) => d.name && d.id)
+    .map((d, i) => ({
+      id: d.id as string,
+      kpi_name: d.name as string,
+      kpi_category: 'revenue',
+      current_value: null,
+      previous_value: null,
+      target_value: null,
+      unit: '$',
+      period: 'current',
+      dataset_id: d.id as string,
+      dax_query: null,
+      raw_result: null,
+      synced_at: now,
+    }));
+
+  return { reports: reportConfigs, kpis };
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function GET() {
@@ -281,11 +333,12 @@ export async function GET() {
   }
 
   // Run all fetches in parallel
-  const [tokenResult, asanaResult, teamsResult, slackResult] = await Promise.allSettled([
+  const [tokenResult, asanaResult, teamsResult, slackResult, powerbiResult] = await Promise.allSettled([
     getM365Token(),
     fetchAsanaTasks(),
     sessionId ? fetchTeamsChats(sessionId) : Promise.resolve([]),
     sessionId ? fetchSlackMessages(sessionId) : Promise.resolve([]),
+    sessionId ? fetchPowerBI(sessionId) : Promise.resolve({ reports: [], kpis: [] }),
   ]);
 
   const token = tokenResult.status === 'fulfilled' ? tokenResult.value : null;
@@ -302,6 +355,7 @@ export async function GET() {
     tasks: asanaResult.status === 'fulfilled' ? asanaResult.value : [],
     chats: teamsResult.status === 'fulfilled' ? teamsResult.value : [],
     slack: slackResult.status === 'fulfilled' ? slackResult.value : [],
+    powerbi: powerbiResult.status === 'fulfilled' ? powerbiResult.value : { reports: [], kpis: [] },
     pipeline: [],
     fetchedAt: new Date().toISOString(),
     source: 'live',

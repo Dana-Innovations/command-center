@@ -25,6 +25,7 @@ interface LiveDataState {
   opportunities: SalesforceOpportunity[];
   chats: Chat[];
   slack: SlackFeedMessage[];
+  powerbi: { reports: unknown[]; kpis: unknown[] };
   loading: boolean;
   error: string | null;
   fetchedAt: Date | null;
@@ -43,6 +44,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [opportunities, setOpportunities] = useState<SalesforceOpportunity[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [slack, setSlack] = useState<SlackFeedMessage[]>([]);
+  const [powerbi, setPowerbi] = useState<{ reports: unknown[]; kpis: unknown[] }>({ reports: [], kpis: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
@@ -60,6 +62,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       setOpportunities((data.pipeline ?? []) as SalesforceOpportunity[]);
       setChats((data.chats ?? []) as Chat[]);
       setSlack((data.slack ?? []) as SlackFeedMessage[]);
+      if (data.powerbi) setPowerbi(data.powerbi as { reports: unknown[]; kpis: unknown[] });
       setFetchedAt(new Date(data.fetchedAt));
       setError(null);
     } catch (e) {
@@ -92,6 +95,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         opportunities,
         chats,
         slack,
+        powerbi,
         loading,
         error,
         fetchedAt,
