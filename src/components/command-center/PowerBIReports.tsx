@@ -77,7 +77,7 @@ function ZoomableReport({ src, title, defaultZoom = 0.7 }: { src: string; title:
   );
 }
 
-export function PowerBIReports() {
+export function PowerBIReports({ filterIds }: { filterIds?: string[] } = {}) {
   const { reportConfigs, loading } = usePowerBI();
   const [expandedReport, setExpandedReport] = useState<string | null>("trends-auto");
   const [embedUrls, setEmbedUrls] = useState<Record<string, string>>({});
@@ -120,9 +120,8 @@ export function PowerBIReports() {
 
   const reports = loading
     ? []
-    : reportConfigs.length > 0
-    ? reportConfigs
-    : [];
+    : (reportConfigs.length > 0 ? reportConfigs : [])
+      .filter(r => !filterIds || filterIds.includes(r.report_id));
 
   return (
     <>

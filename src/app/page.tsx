@@ -3,12 +3,13 @@ import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { TabBar, type TabId } from "@/components/layout/TabBar";
 import { Footer } from "@/components/layout/Footer";
-import { CommandCenterView } from "@/components/views/CommandCenterView";
+import { PriorityView } from "@/components/views/PriorityView";
+import { SalesTabView } from "@/components/views/SalesTabView";
+import { MetricsView } from "@/components/views/MetricsView";
 import { PeopleView } from "@/components/views/PeopleView";
+import { CalendarView } from "@/components/views/CalendarView";
+import { SignalsView } from "@/components/views/SignalsView";
 import { usePeople } from "@/hooks/usePeople";
-import { TimelineView } from "@/components/views/TimelineView";
-import { TrendsView } from "@/components/views/TrendsView";
-import { SalesView } from "@/components/views/SalesView";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
 
@@ -21,14 +22,13 @@ export default function Home() {
 }
 
 function HomeContent() {
-  const [activeTab, setActiveTab] = useState<TabId>("command-center");
+  const [activeTab, setActiveTab] = useState<TabId>("priority");
   const [eodOpen, setEodOpen] = useState(false);
   const { loading, fetchedAt, error, refetch } = useLiveData();
   const { people } = usePeople();
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      {/* Grain overlay */}
       <div className="grain-overlay" aria-hidden="true" />
 
       <Header
@@ -45,15 +45,15 @@ function HomeContent() {
       />
 
       <main className="px-6 pb-8">
-        {activeTab === "command-center" && <CommandCenterView />}
-        {activeTab === "sales" && <SalesView />}
-        {activeTab === "people" && <PeopleView people={people} loading={loading} />}
-        {activeTab === "timeline" && <TimelineView />}
-        {activeTab === "trends" && <TrendsView />}
+        {activeTab === "priority"  && <PriorityView />}
+        {activeTab === "sales"     && <SalesTabView />}
+        {activeTab === "metrics"   && <MetricsView />}
+        {activeTab === "people"    && <PeopleView people={people} loading={loading} />}
+        {activeTab === "calendar"  && <CalendarView />}
+        {activeTab === "signals"   && <SignalsView />}
       </main>
 
       <Footer onEodSummary={() => setEodOpen(true)} />
-
       <EODSummary isOpen={eodOpen} onClose={() => setEodOpen(false)} />
     </div>
   );
