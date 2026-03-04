@@ -21,12 +21,14 @@ async function getToken() {
 }
 
 async function uploadImageToOneDrive(token: string, imageBase64: string, filename: string): Promise<string> {
+  const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+  const mime = mimeMatch?.[1] || 'image/jpeg';
   const buffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
   const uploadRes = await fetch(
     `https://graph.microsoft.com/v1.0/me/drive/root:/CommandCenterClips/${filename}:/content`,
     {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/png' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': mime },
       body: buffer,
     }
   );
@@ -77,6 +79,54 @@ export async function POST(req: NextRequest) {
 
       const chatRes = await fetch(
         `https://graph.microsoft.com/v1.0/chats/${destination.id}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: { contentType: 'html', content: htmlContent } }),
+        }
+      );
+      if (!chatRes.ok) throw new Error(`Teams send failed: ${chatRes.status}`);
+      return NextResponse.json({ ok: true, to: destination.name });
+    }
+
+    if (destination.type === 'teams_person') {
+      // Create or get a 1:1 chat with the person
+      const createChatRes = await fetch('https://graph.microsoft.com/v1.0/chats', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatType: 'oneOnOne',
+          members: [
+            {
+              '@odata.type': '#microsoft.graph.aadUserConversationMember',
+              roles: ['owner'],
+              'user@odata.bind': "https://graph.microsoft.com/v1.0/users('me')",
+            },
+            {
+              '@odata.type': '#microsoft.graph.aadUserConversationMember',
+              roles: ['owner'],
+              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${destination.address}')`,
+            },
+          ],
+        }),
+      });
+
+      if (!createChatRes.ok && createChatRes.status !== 409) {
+        throw new Error(`Teams createOrGetChat failed: ${createChatRes.status}`);
+      }
+      const chatData = await createChatRes.json();
+      const chatId = chatData.id;
+      if (!chatId) throw new Error('No chat ID returned from createOrGetChat');
+
+      const htmlContent = [
+        note ? `<p style="font-size:14px">${note.replace(/\n/g, '<br>')}</p>` : '',
+        imageUrl ? `<p><a href="${imageUrl}" style="color:#d4a44c;font-weight:600">📎 View screenshot →</a></p>` : '',
+        reportUrl ? `<p><a href="${reportUrl}" style="color:#d4a44c;font-weight:600">📊 Open ${reportName || 'Report'} →</a></p>` : '',
+        `<p style="color:#666;font-size:11px">Sent from Sonance Command Center &middot; ${timestamp}</p>`,
+      ].filter(Boolean).join('');
+
+      const chatRes = await fetch(
+        `https://graph.microsoft.com/v1.0/chats/${chatId}/messages`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useChats } from "@/hooks/useChats";
 
 interface Destination {
-  type: "teams_chat" | "email";
+  type: "teams_chat" | "teams_person" | "email";
   id?: string;
   name: string;
   address?: string;
@@ -80,12 +80,19 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const bitmap = await (imageCapture as any).grabFrame() as ImageBitmap;
 
+      // Resize to max 1280px wide, convert to JPEG at 70% quality
+      const MAX_W = 1280;
+      let { width, height } = bitmap;
+      if (width > MAX_W) {
+        height = Math.round(height * MAX_W / width);
+        width = MAX_W;
+      }
       const canvas = document.createElement("canvas");
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(bitmap, 0, 0);
-      const dataUrl = canvas.toDataURL("image/png");
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
 
       track.stop();
       stream.getTracks().forEach(t => t.stop());
@@ -104,7 +111,22 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setImageBase64(ev.target?.result as string);
+      const img = new window.Image();
+      img.onload = () => {
+        const MAX_W = 1280;
+        let { width, height } = img;
+        if (width > MAX_W) {
+          height = Math.round(height * MAX_W / width);
+          width = MAX_W;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        setImageBase64(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
   }
@@ -148,6 +170,7 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
     ...chats
       .filter(c => c.topic)
       .map(c => ({ type: "teams_chat" as const, id: c.id, name: c.topic || "Teams Chat" })),
+    ...KNOWN_CONTACTS.map(c => ({ type: "teams_person" as const, name: c.name, address: c.address })),
     ...KNOWN_CONTACTS.map(c => ({ type: "email" as const, name: c.name, address: c.address })),
   ];
 
@@ -317,9 +340,9 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                     <div className="flex-1 bg-[#1a1a1a] border border-accent-amber/30 rounded-lg px-3 py-2 text-sm text-white flex items-center gap-2">
                       <span className={cn(
                         "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded",
-                        destination.type === "teams_chat" ? "bg-[#5865f2]/20 text-[#5865f2]" : "bg-accent-teal/20 text-accent-teal"
+                        destination.type === "email" ? "bg-accent-teal/20 text-accent-teal" : "bg-[#5865f2]/20 text-[#5865f2]"
                       )}>
-                        {destination.type === "teams_chat" ? "Teams" : "Email"}
+                        {destination.type === "email" ? "Email" : "Teams"}
                       </span>
                       {destination.name}
                     </div>
@@ -365,9 +388,9 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                           >
                             <span className={cn(
                               "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0",
-                              d.type === "teams_chat" ? "bg-[#5865f2]/20 text-[#5865f2]" : "bg-accent-teal/20 text-accent-teal"
+                              d.type === "email" ? "bg-accent-teal/20 text-accent-teal" : "bg-[#5865f2]/20 text-[#5865f2]"
                             )}>
-                              {d.type === "teams_chat" ? "Teams" : "Email"}
+                              {d.type === "email" ? "Email" : "Teams"}
                             </span>
                             <span className="truncate">{d.name}</span>
                           </button>
@@ -385,7 +408,9 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                 <p className="text-xs text-red-400 mb-2">{sendError}</p>
               )}
               {sent ? (
-                <div className="text-sm text-green-400 font-medium text-center py-2">✓ Drafted — check Outlook Drafts</div>
+                <div className="text-sm text-green-400 font-medium text-center py-2">
+                  {destination?.type === "email" ? "✓ Drafted — check Outlook Drafts" : "✓ Sent via Teams"}
+                </div>
               ) : (
                 <button
                   onClick={handleSend}
@@ -395,14 +420,16 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                   {sending ? (
                     <><span className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> Sending…</>
                   ) : (
-                    <><Send className="w-4 h-4" /> Draft Email</>
+                    <><Send className="w-4 h-4" /> {destination?.type === "email" ? "Draft Email" : "Send via Teams"}</>
                   )}
                 </button>
               )}
               <p className="text-[10px] text-white/25 text-center mt-2">
                 {destination?.type === "email"
                   ? "Sends via Outlook · screenshot inline · report link button"
-                  : "Sends via Teams · screenshot link · report link"}
+                  : destination?.type === "teams_chat" || destination?.type === "teams_person"
+                    ? "Sends via Teams · screenshot link · report link"
+                    : ""}
               </p>
             </div>
           </div>
