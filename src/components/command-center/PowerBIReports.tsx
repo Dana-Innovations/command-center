@@ -190,7 +190,7 @@ export function PowerBIReports() {
                   </div>
                 )}
 
-                {/* Expanded: iframe embed or placeholder */}
+                {/* Expanded: iframe embed or inline paste UI */}
                 {isExpanded && !isEditing && (
                   <div className="border-t border-[var(--bg-card-border)]">
                     {embedUrl ? (
@@ -202,25 +202,38 @@ export function PowerBIReports() {
                         title={report.report_name}
                       />
                     ) : (
-                      <div className="p-6 text-center">
-                        <BarChart3 className="w-8 h-8 text-text-muted mx-auto mb-3 opacity-40" />
-                        <p className="text-sm text-text-muted mb-1">
-                          No embed URL set for <strong className="text-text-body">{report.report_name}</strong>
-                        </p>
+                      <div className="p-5">
                         <p className="text-xs text-text-muted mb-3">
-                          In Power BI, open the report → <strong>File → Publish to web → Create embed code</strong>.<br />
-                          Copy the iframe <code className="bg-white/5 px-1 rounded">src</code> URL and click "+ embed" above.
+                          Paste the embed link from Power BI to display this report inline:
                         </p>
-                        <div className="flex items-center justify-center gap-2">
+                        <input
+                          className="w-full bg-[var(--bg-card)] border border-[var(--bg-card-border)] rounded-lg px-3 py-2 text-xs text-text-body focus:outline-none focus:border-accent-amber/30 placeholder:text-text-muted mb-2"
+                          placeholder="https://app.powerbi.com/reportEmbed?reportId=..."
+                          value={editingId === report.report_id ? draftUrl : ""}
+                          onFocus={() => { setEditingId(report.report_id); setDraftUrl(""); }}
+                          onChange={e => { setEditingId(report.report_id); setDraftUrl(e.target.value); }}
+                          onKeyDown={e => e.key === "Enter" && handleSaveUrl(report.report_id)}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="text-[10px] px-3 py-1.5 rounded bg-accent-amber text-[#0d0d0d] font-semibold cursor-pointer hover:bg-accent-amber/90 transition-colors disabled:opacity-40"
+                            disabled={!draftUrl.trim() || editingId !== report.report_id}
+                            onClick={() => handleSaveUrl(report.report_id)}
+                          >
+                            Embed Report
+                          </button>
                           <a
                             href={pbiUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs px-3 py-1.5 rounded border border-accent-teal/30 text-accent-teal hover:bg-accent-teal/10 transition-colors flex items-center gap-1.5"
+                            className="text-[10px] px-2.5 py-1.5 rounded border border-[var(--bg-card-border)] text-text-muted hover:text-text-body transition-colors flex items-center gap-1"
                           >
-                            Open {report.report_name} in Power BI <ExternalLink className="w-3 h-3" />
+                            Open in Power BI <ExternalLink className="w-3 h-3" />
                           </a>
                         </div>
+                        <p className="text-[10px] text-text-muted mt-3 leading-relaxed">
+                          In Power BI: open this report → <strong className="text-text-body">File → Embed report → Website or portal</strong> → copy the link shown.
+                        </p>
                       </div>
                     )}
                   </div>
