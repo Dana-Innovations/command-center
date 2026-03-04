@@ -57,28 +57,46 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [clipMode, onClose]);
 
-  // Attempt html2canvas capture of the iframe container
+  // Capture using Screen Capture API (getDisplayMedia) — works despite cross-origin iframe
   async function handleCapture() {
     setCapturing(true);
+    setClipMode(true); // open panel immediately so user sees progress
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const el = iframeRef.current?.parentElement;
-      if (!el) throw new Error("No element");
-      const canvas = await html2canvas(el, {
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#111",
-        scale: window.devicePixelRatio || 1,
+      // Ask browser to capture the current tab
+      const stream = await (navigator.mediaDevices as MediaDevices & {
+        getDisplayMedia: (opts: object) => Promise<MediaStream>
+      }).getDisplayMedia({
+        video: { displaySurface: "browser" },
+        audio: false,
+        preferCurrentTab: true,
       });
+
+      const track = stream.getVideoTracks()[0];
+      // Use ImageCapture API via dynamic cast (not fully typed in TS)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const IC = (window as any).ImageCapture;
+      if (!IC) throw new Error("ImageCapture not supported");
+      const imageCapture = new IC(track);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bitmap = await (imageCapture as any).grabFrame() as ImageBitmap;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(bitmap, 0, 0);
       const dataUrl = canvas.toDataURL("image/png");
+
+      track.stop();
+      stream.getTracks().forEach(t => t.stop());
+
       setImageBase64(dataUrl);
     } catch {
-      // Cross-origin iframe blocks canvas — prompt manual upload
+      // User cancelled or browser unsupported — leave empty for manual upload
       setImageBase64(null);
     } finally {
       setCapturing(false);
     }
-    setClipMode(true);
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -99,7 +117,7 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
       const res = await fetch("/api/actions/send-clip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note, imageBase64, destination }),
+        body: JSON.stringify({ note, imageBase64, destination, reportUrl: embedUrl, reportName }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
@@ -375,7 +393,9 @@ export function PowerBIFullscreen({ reportName, embedUrl, onClose }: Props) {
                 </button>
               )}
               <p className="text-[10px] text-white/25 text-center mt-2">
-                {destination?.type === "email" ? "Sends via Outlook with image inline" : "Sends as Teams message with link"}
+                {destination?.type === "email"
+                  ? "Sends via Outlook · screenshot inline · report link button"
+                  : "Sends via Teams · screenshot link · report link"}
               </p>
             </div>
           </div>

@@ -46,7 +46,7 @@ async function uploadImageToOneDrive(token: string, imageBase64: string, filenam
 
 export async function POST(req: NextRequest) {
   try {
-    const { note, imageBase64, destination } = await req.json();
+    const { note, imageBase64, destination, reportUrl, reportName } = await req.json();
     if (!destination) return NextResponse.json({ error: 'No destination' }, { status: 400 });
 
     const token = await getToken();
@@ -61,12 +61,19 @@ export async function POST(req: NextRequest) {
       imageUrl = await uploadImageToOneDrive(token, imageBase64, filename).catch(() => '');
     }
 
+    const reportBtnHtml = reportUrl
+      ? `<p style="margin:14px 0"><a href="${reportUrl}" style="display:inline-block;background:#d4a44c;color:#0d0d0d;padding:9px 18px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">📊 Open ${reportName || 'Report'} →</a></p>`
+      : '';
+
+    const reportLinkText = reportUrl ? `\n\n📊 Open report: ${reportUrl}` : '';
+
     if (destination.type === 'teams_chat') {
       const htmlContent = [
-        `<p>${(note || '').replace(/\n/g, '<br>')}</p>`,
-        imageUrl ? `<p><a href="${imageUrl}">📊 View clip →</a></p>` : '',
-        `<p style="color:#999;font-size:11px">Sent from Command Center &middot; ${timestamp}</p>`,
-      ].join('');
+        note ? `<p style="font-size:14px">${note.replace(/\n/g, '<br>')}</p>` : '',
+        imageUrl ? `<p><a href="${imageUrl}" style="color:#d4a44c;font-weight:600">📎 View screenshot →</a></p>` : '',
+        reportUrl ? `<p><a href="${reportUrl}" style="color:#d4a44c;font-weight:600">📊 Open ${reportName || 'Report'} →</a></p>` : '',
+        `<p style="color:#666;font-size:11px">Sent from Sonance Command Center &middot; ${timestamp}</p>`,
+      ].filter(Boolean).join('');
 
       const chatRes = await fetch(
         `https://graph.microsoft.com/v1.0/chats/${destination.id}/messages`,
@@ -82,20 +89,22 @@ export async function POST(req: NextRequest) {
 
     if (destination.type === 'email') {
       const htmlBody = [
-        `<div style="font-family:sans-serif;font-size:14px">`,
-        `<p>${(note || '').replace(/\n/g, '<br>')}</p>`,
-        imageBase64 ? `<p><img src="${imageBase64}" style="max-width:640px;border-radius:8px;border:1px solid #eee" /></p>` : '',
-        imageUrl ? `<p><a href="${imageUrl}">📊 View in OneDrive →</a></p>` : '',
-        `<p style="color:#999;font-size:12px">Sent from Command Center &middot; ${timestamp}</p>`,
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;max-width:680px">`,
+        note ? `<p style="font-size:15px;line-height:1.5;color:#1a1a1a">${note.replace(/\n/g, '<br>')}</p>` : '',
+        imageBase64 ? `<p style="margin:16px 0"><img src="${imageBase64}" style="max-width:100%;border-radius:8px;border:1px solid #ddd;display:block" /></p>` : '',
+        reportBtnHtml,
+        imageUrl ? `<p style="margin:8px 0"><a href="${imageUrl}" style="color:#888;font-size:12px">View screenshot in OneDrive →</a></p>` : '',
+        `<hr style="border:none;border-top:1px solid #eee;margin:20px 0" />`,
+        `<p style="color:#999;font-size:12px">Sent from Sonance Command Center &middot; ${timestamp}</p>`,
         `</div>`,
-      ].join('');
+      ].filter(Boolean).join('');
 
       const sendRes = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: {
-            subject: `📊 Command Center Clip · ${timestamp}`,
+            subject: `📊 ${reportName || 'Command Center'} Clip · ${timestamp}`,
             body: { contentType: 'HTML', content: htmlBody },
             toRecipients: [{ emailAddress: { address: destination.address, name: destination.name || destination.address } }],
           },
