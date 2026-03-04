@@ -410,11 +410,12 @@ async function fetchSalesforceKPIs(sessionId: string) {
 
 
 async function fetchSalesforce(sessionId: string) {
-  const baseFields = "Id, Name, Amount, StageName, CloseDate, AccountId, Account.Name, OwnerId, Owner.Name, Probability";
-  const enrichedFields = `${baseFields}, RecordType.Name, Territory__c, Sales_Channel__c, Days_In_Stage__c`;
+  const query = "SELECT Id, Name, Amount, StageName, CloseDate, Account.Name, Owner.Name, Probability, RecordType.Name, Type FROM Opportunity WHERE IsClosed = false ORDER BY Amount DESC NULLS LAST LIMIT 50";
 
-  const mapRecords = (records: Record<string, unknown>[], enriched: boolean) =>
-    records.map((r) => ({
+  try {
+    const result = await cortexCall(sessionId, 'sf_opps', 'salesforce__run_soql_query', { query });
+    const records: Record<string, unknown>[] = result?.records ?? [];
+    return records.map((r) => ({
       id: r.Id as string,
       sf_opportunity_id: r.Id as string,
       name: r.Name as string,
@@ -426,33 +427,16 @@ async function fetchSalesforce(sessionId: string) {
       probability: Number(r.Probability ?? 0),
       is_closed: false,
       is_won: false,
-      territory: enriched ? (r.Territory__c as string) || '' : '',
-      sales_channel: enriched ? (r.Sales_Channel__c as string) || '' : '',
-      record_type: enriched ? (r.RecordType as Record<string, unknown>)?.Name as string || '' : '',
-      days_in_stage: enriched ? Number(r.Days_In_Stage__c) || null : null,
+      record_type: (r.RecordType as Record<string, unknown>)?.Name as string || (r.Type as string) || '',
+      territory: '',
+      sales_channel: '',
+      days_in_stage: null,
       days_to_close: Math.ceil((new Date(r.CloseDate as string).getTime() - Date.now()) / 86400000),
       has_overdue_task: false,
       sf_url: `https://sonance.lightning.force.com/lightning/r/Opportunity/${r.Id as string}/view`,
     }));
-
-  try {
-    // Try enriched query first
-    const result = await cortexCall(sessionId, 'sf_opps', 'salesforce__run_soql_query', {
-      query: `SELECT ${enrichedFields} FROM Opportunity WHERE IsClosed = false ORDER BY Amount DESC NULLS LAST LIMIT 50`
-    });
-    const records: Record<string, unknown>[] = result?.records ?? [];
-    return mapRecords(records, true);
   } catch {
-    // Fallback to base fields if custom fields don't exist on the org
-    try {
-      const result = await cortexCall(sessionId, 'sf_opps_fallback', 'salesforce__run_soql_query', {
-        query: `SELECT ${baseFields} FROM Opportunity WHERE IsClosed = false ORDER BY Amount DESC NULLS LAST LIMIT 50`
-      });
-      const records: Record<string, unknown>[] = result?.records ?? [];
-      return mapRecords(records, false);
-    } catch {
-      return [];
-    }
+    return [];
   }
 }
 
