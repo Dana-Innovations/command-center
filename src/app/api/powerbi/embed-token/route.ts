@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const sessionId = await cortexInit(cortexToken);
 
     // Generate embed token via Cortex Power BI MCP
-    const result = await cortexCall(cortexToken, sessionId, "powerbi__generate_embed_token", {
+    const result = await cortexCall(cortexToken, sessionId, "embed-token", "powerbi__generate_embed_token", {
       report_id: reportId,
       dataset_ids: datasetIds || [],
       workspace_id: workspaceId,

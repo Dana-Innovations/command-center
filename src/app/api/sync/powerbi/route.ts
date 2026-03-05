@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const sessionId = await cortexInit(cortexToken);
 
     // Fetch reports/dashboards via Cortex Power BI MCP
-    const result = await cortexCall(cortexToken, sessionId, "powerbi__list_reports", {});
+    const result = await cortexCall(cortexToken, sessionId, "list-reports", "powerbi__list_reports", {});
 
     return NextResponse.json(result);
   } catch (err) {
