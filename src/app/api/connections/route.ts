@@ -17,12 +17,14 @@ export async function GET(request: NextRequest) {
 
   const connections = await getConnections(cortexToken);
 
-  // Map to the services the Command Center needs
+  // Map to the services the Command Center needs, matching by mcp_name or provider
   const services = REQUIRED_SERVICES.map((svc) => {
     const conn = connections.find(
       (c) =>
+        c.mcp_name === svc.mcp_name ||
         c.provider === svc.provider ||
-        c.provider === svc.provider.replace("microsoft", "m365")
+        c.mcp_name === svc.provider ||
+        c.provider === svc.mcp_name
     );
     return {
       ...svc,
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ services });
+  return NextResponse.json({ services, _raw: connections });
 }
 
 /**

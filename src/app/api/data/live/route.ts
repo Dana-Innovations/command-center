@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCortexToken, cortexInit, cortexCall } from "@/lib/cortex/client";
+import { getConnections, type CortexConnection } from "@/lib/cortex/connections";
 
 // ─── M365 via Cortex MCP ────────────────────────────────────────────────────
 
@@ -99,18 +100,49 @@ async function fetchCalendar(token: string, sessionId: string) {
 // ─── Asana via Cortex MCP ─────────────────────────────────────────────────
 
 async function fetchAsanaTasks(token: string, sessionId: string) {
-  const result = await cortexCall(
+  // Step 1: Discover the user's projects dynamically
+  const projectsResult = await cortexCall(
     token,
     sessionId,
-    "asana",
-    "asana__list_tasks",
-    { project_id: "1211840949719691", limit: 100 }
+    "asana_projects",
+    "asana__list_projects",
+    { limit: 20 }
   );
-  const tasks: Record<string, unknown>[] = result.tasks ?? result.data ?? [];
+  const projects: Record<string, unknown>[] =
+    projectsResult.projects ?? projectsResult.data ?? [];
+
+  if (projects.length === 0) return [];
+
+  // Step 2: Fetch tasks from up to 5 projects in parallel
+  const projectSlice = projects.slice(0, 5);
+  const taskResults = await Promise.allSettled(
+    projectSlice.map((p) =>
+      cortexCall(token, sessionId, `asana_${p.gid}`, "asana__list_tasks", {
+        project_gid: (p.gid || p.id) as string,
+        limit: 50,
+      })
+    )
+  );
+
   const today = new Date();
   const now = new Date().toISOString();
+  const allTasks: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
 
-  return tasks
+  for (let i = 0; i < taskResults.length; i++) {
+    const r = taskResults[i];
+    if (r.status !== "fulfilled") continue;
+    const tasks: Record<string, unknown>[] = r.value.tasks ?? r.value.data ?? [];
+    const projectName = (projectSlice[i].name as string) || "Tasks";
+    for (const t of tasks) {
+      const id = (t.gid || t.id) as string;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      allTasks.push({ ...t, project_name: projectName });
+    }
+  }
+
+  return allTasks
     .filter((t) => !t.completed)
     .map((t) => {
       const dueOn = (t.due_on as string) || (t.due_date as string) || null;
@@ -508,6 +540,14 @@ async function fetchSalesforce(token: string, sessionId: string) {
   }
 }
 
+// ─── Connection check helpers ─────────────────────────────────────────────
+
+function hasConnection(connections: CortexConnection[], mcpName: string): boolean {
+  return connections.some(
+    (c) => (c.mcp_name === mcpName || c.provider === mcpName) && c.connected
+  );
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -520,6 +560,17 @@ export async function GET(request: NextRequest) {
   }
 
   const errors: Record<string, string | null> = {};
+  const skipped: string[] = [];
+
+  // Check which services the user has connected via Cortex
+  const connections = await getConnections(cortexToken);
+  const hasM365 = hasConnection(connections, "m365") || hasConnection(connections, "microsoft");
+  const hasAsana = hasConnection(connections, "asana");
+  const hasSlack = hasConnection(connections, "slack");
+  const hasSalesforce = hasConnection(connections, "salesforce");
+  const hasPowerBI = hasConnection(connections, "powerbi");
+
+  console.log("[live] Connection status:", { hasM365, hasAsana, hasSlack, hasSalesforce, hasPowerBI });
 
   // Initialize Cortex session with user's token
   let sessionId = "";
@@ -542,61 +593,81 @@ export async function GET(request: NextRequest) {
         fetchedAt: new Date().toISOString(),
         source: "live",
         errors,
+        skipped: ["all — no Cortex session"],
+        connections: { m365: hasM365, asana: hasAsana, slack: hasSlack, salesforce: hasSalesforce, powerbi: hasPowerBI },
       },
       { status: 200 }
     );
   }
 
-  // All data fetches in parallel via Cortex MCP with user's token
-  const [
-    emailsResult,
-    calendarResult,
-    asanaResult,
-    teamsResult,
-    slackResult,
-    powerbiResult,
-    sfResult,
-    sfKpiResult,
-  ] = await Promise.allSettled([
-    fetchEmails(cortexToken, sessionId),
-    fetchCalendar(cortexToken, sessionId),
-    fetchAsanaTasks(cortexToken, sessionId),
-    fetchTeamsChats(cortexToken, sessionId),
-    fetchSlackMessages(cortexToken, sessionId),
-    fetchPowerBI(cortexToken, sessionId),
-    fetchSalesforce(cortexToken, sessionId),
-    fetchSalesforceKPIs(cortexToken, sessionId),
-  ]);
+  // Only fetch data for services the user has connected
+  const fetches: Record<string, Promise<unknown>> = {};
 
-  // Log any errors
-  if (emailsResult.status === "rejected") errors.emails = String(emailsResult.reason);
-  if (calendarResult.status === "rejected") errors.calendar = String(calendarResult.reason);
-  if (asanaResult.status === "rejected") errors.tasks = String(asanaResult.reason);
-  if (teamsResult.status === "rejected") errors.chats = String(teamsResult.reason);
-  if (slackResult.status === "rejected") errors.slack = String(slackResult.reason);
+  if (hasM365) {
+    fetches.emails = fetchEmails(cortexToken, sessionId);
+    fetches.calendar = fetchCalendar(cortexToken, sessionId);
+    fetches.chats = fetchTeamsChats(cortexToken, sessionId);
+  } else {
+    skipped.push("m365");
+  }
 
-  const pbi =
-    powerbiResult.status === "fulfilled"
-      ? powerbiResult.value
-      : { reports: [], kpis: [] };
-  const sfKpis =
-    sfKpiResult.status === "fulfilled" ? sfKpiResult.value : [];
+  if (hasAsana) {
+    fetches.tasks = fetchAsanaTasks(cortexToken, sessionId);
+  } else {
+    skipped.push("asana");
+  }
+
+  if (hasSlack) {
+    fetches.slack = fetchSlackMessages(cortexToken, sessionId);
+  } else {
+    skipped.push("slack");
+  }
+
+  if (hasPowerBI) {
+    fetches.powerbi = fetchPowerBI(cortexToken, sessionId);
+  } else {
+    skipped.push("powerbi");
+  }
+
+  if (hasSalesforce) {
+    fetches.pipeline = fetchSalesforce(cortexToken, sessionId);
+    fetches.sfKpis = fetchSalesforceKPIs(cortexToken, sessionId);
+  } else {
+    skipped.push("salesforce");
+  }
+
+  // Execute all fetches in parallel
+  const keys = Object.keys(fetches);
+  const results = await Promise.allSettled(Object.values(fetches));
+  const resolved: Record<string, unknown> = {};
+  for (let i = 0; i < keys.length; i++) {
+    const r = results[i];
+    if (r.status === "fulfilled") {
+      resolved[keys[i]] = r.value;
+    } else {
+      errors[keys[i]] = String(r.reason);
+      resolved[keys[i]] = keys[i] === "powerbi" ? { reports: [], kpis: [] } : [];
+    }
+  }
+
+  const pbi = (resolved.powerbi ?? { reports: [], kpis: [] }) as { reports: unknown[]; kpis: unknown[] };
+  const sfKpis = (resolved.sfKpis ?? []) as unknown[];
 
   return NextResponse.json({
-    emails:
-      emailsResult.status === "fulfilled" ? emailsResult.value : [],
-    calendar:
-      calendarResult.status === "fulfilled" ? calendarResult.value : [],
-    tasks: asanaResult.status === "fulfilled" ? asanaResult.value : [],
-    chats: teamsResult.status === "fulfilled" ? teamsResult.value : [],
-    slack: slackResult.status === "fulfilled" ? slackResult.value : [],
+    emails: resolved.emails ?? [],
+    calendar: resolved.calendar ?? [],
+    tasks: resolved.tasks ?? [],
+    chats: resolved.chats ?? [],
+    slack: resolved.slack ?? [],
     powerbi: {
       ...pbi,
       kpis: sfKpis.length > 0 ? sfKpis : pbi.kpis,
     },
-    pipeline: sfResult.status === "fulfilled" ? sfResult.value : [],
+    pipeline: resolved.pipeline ?? [],
     fetchedAt: new Date().toISOString(),
     source: "live",
     errors,
+    skipped,
+    connections: { m365: hasM365, asana: hasAsana, slack: hasSlack, salesforce: hasSalesforce, powerbi: hasPowerBI },
   });
 }

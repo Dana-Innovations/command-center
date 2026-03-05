@@ -18,6 +18,14 @@ import type {
   SlackFeedMessage,
 } from "./types";
 
+export interface ConnectionStatus {
+  m365: boolean;
+  asana: boolean;
+  slack: boolean;
+  salesforce: boolean;
+  powerbi: boolean;
+}
+
 interface LiveDataState {
   emails: Email[];
   calendar: CalendarEvent[];
@@ -26,6 +34,7 @@ interface LiveDataState {
   chats: Chat[];
   slack: SlackFeedMessage[];
   powerbi: { reports: unknown[]; kpis: unknown[] };
+  connections: ConnectionStatus;
   loading: boolean;
   error: string | null;
   fetchedAt: Date | null;
@@ -45,6 +54,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [slack, setSlack] = useState<SlackFeedMessage[]>([]);
   const [powerbi, setPowerbi] = useState<{ reports: unknown[]; kpis: unknown[] }>({ reports: [], kpis: [] });
+  const [connections, setConnections] = useState<ConnectionStatus>({ m365: false, asana: false, slack: false, salesforce: false, powerbi: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
@@ -63,6 +73,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       setChats((data.chats ?? []) as Chat[]);
       setSlack((data.slack ?? []) as SlackFeedMessage[]);
       if (data.powerbi) setPowerbi(data.powerbi as { reports: unknown[]; kpis: unknown[] });
+      if (data.connections) setConnections(data.connections as ConnectionStatus);
       setFetchedAt(new Date(data.fetchedAt));
       setError(null);
     } catch (e) {
@@ -96,6 +107,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         chats,
         slack,
         powerbi,
+        connections,
         loading,
         error,
         fetchedAt,
