@@ -1,22 +1,29 @@
 "use client";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 import { SlackIcon } from "@/components/ui/icons";
 import { useSlackFeed } from "@/hooks/useSlackFeed";
+import { useConnections } from "@/hooks/useConnections";
 
 export function SlackCard() {
   const { messages, loading } = useSlackFeed();
+  const { slack: slackConnected } = useConnections();
 
   return (
     <section className="glass-card anim-card" style={{ animationDelay: "80ms" }}>
       <h2 className="flex items-center gap-2 text-sm font-semibold text-text-heading mb-4">
         <SlackIcon />
         Slack
-        <span className="inline-flex items-center rounded-full bg-[rgba(90,199,139,0.12)] text-accent-green px-2 py-0.5 text-xs font-medium">
-          {messages.length} messages
-        </span>
+        {slackConnected && (
+          <span className="inline-flex items-center rounded-full bg-[rgba(90,199,139,0.12)] text-accent-green px-2 py-0.5 text-xs font-medium">
+            {messages.length} messages
+          </span>
+        )}
       </h2>
-      {loading && messages.length === 0 ? (
+      {!slackConnected ? (
+        <ConnectPrompt service="Slack" />
+      ) : loading && messages.length === 0 ? (
         <div className="text-sm text-text-muted animate-pulse py-4 text-center">Loading Slack…</div>
       ) : messages.length === 0 ? (
         <EmptyState />

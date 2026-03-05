@@ -1,6 +1,8 @@
 "use client";
 
 import { usePowerBI } from "@/hooks/usePowerBI";
+import { useConnections } from "@/hooks/useConnections";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 import { TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -63,6 +65,19 @@ function TrendIndicator({
 
 export function PowerBIKPIs() {
   const { kpisByCategory, loading, error } = usePowerBI();
+  const { salesforce: sfConnected } = useConnections();
+
+  if (!sfConnected) {
+    return (
+      <section className="glass-card anim-card">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="w-4 h-4 text-[#0070D2]" />
+          <h2 className="text-sm font-semibold text-text-heading">Pipeline KPIs</h2>
+        </div>
+        <ConnectPrompt service="Salesforce" />
+      </section>
+    );
+  }
 
   if (loading) {
     return (

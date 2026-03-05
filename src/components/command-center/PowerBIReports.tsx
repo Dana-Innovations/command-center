@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { usePowerBI } from "@/hooks/usePowerBI";
+import { useConnections } from "@/hooks/useConnections";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 import { cn } from "@/lib/utils";
 import { ExternalLink, ChevronDown, ChevronUp, BarChart3, Maximize2 } from "lucide-react";
 import { PowerBIFullscreen } from "./PowerBIFullscreen";
@@ -79,6 +81,7 @@ function ZoomableReport({ src, title, defaultZoom = 0.7 }: { src: string; title:
 
 export function PowerBIReports({ filterIds }: { filterIds?: string[] } = {}) {
   const { reportConfigs, loading } = usePowerBI();
+  const { powerbi: pbiConnected } = useConnections();
   const [expandedReport, setExpandedReport] = useState<string | null>("trends-auto");
   const [embedUrls, setEmbedUrls] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -150,7 +153,9 @@ export function PowerBIReports({ filterIds }: { filterIds?: string[] } = {}) {
         )}
       </div>
 
-      {loading ? (
+      {!pbiConnected ? (
+        <ConnectPrompt service="Power BI" />
+      ) : loading ? (
         <div className="text-sm text-text-muted animate-pulse">Loading reports…</div>
       ) : reports.length === 0 ? (
         <div className="text-sm text-text-muted">No Power BI reports found.</div>

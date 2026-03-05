@@ -4,7 +4,9 @@ import { cn } from "@/lib/utils";
 import { useSalesforce } from "@/hooks/useSalesforce";
 import type { SalesforceOpportunity } from "@/lib/types";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 import { SFLink } from "@/components/ui/icons";
+import { useConnections } from "@/hooks/useConnections";
 
 interface Deal {
   name: string;
@@ -65,6 +67,7 @@ function stageBadge(stage: string) {
 
 export function SalesforcePipeline() {
   const { openOpps, loading } = useSalesforce();
+  const { salesforce: sfConnected } = useConnections();
 
   const deals = useMemo(() => {
     return openOpps.map(oppToDeal);
@@ -104,7 +107,9 @@ export function SalesforcePipeline() {
         {loading && <span className="text-[10px] text-text-muted font-normal">(loading…)</span>}
       </h2>
 
-      {deals.length === 0 && !loading ? (
+      {!sfConnected ? (
+        <ConnectPrompt service="Salesforce" />
+      ) : deals.length === 0 && !loading ? (
         <EmptyState />
       ) : deals.length === 0 ? null : (
       <>

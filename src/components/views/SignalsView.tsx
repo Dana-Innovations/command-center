@@ -8,10 +8,13 @@ import { useChats } from "@/hooks/useChats";
 import { transformJeanaItems } from "@/lib/transformers";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useConnections } from "@/hooks/useConnections";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 
 function TeamsChatsCard() {
   const { chats, loading } = useChats();
   const { user } = useAuth();
+  const { m365: m365Connected } = useConnections();
   const fullName = user?.user_metadata?.full_name ?? "";
 
   return (
@@ -26,7 +29,9 @@ function TeamsChatsCard() {
         )}
       </h2>
 
-      {loading ? (
+      {!m365Connected ? (
+        <ConnectPrompt service="Microsoft 365" />
+      ) : loading ? (
         <div className="text-sm text-text-muted animate-pulse">Loading chats…</div>
       ) : chats.length === 0 ? (
         <div className="text-sm text-text-muted">No Teams chats found.</div>

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useHygieneEmails, HygieneEmail } from "@/hooks/useHygieneEmails";
+import { useConnections } from "@/hooks/useConnections";
+import { ConnectPrompt } from "@/components/ui/ConnectPrompt";
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -158,26 +160,31 @@ function ActionBtn({
 
 export function EmailHygieneCard() {
   const { emails, loading, refetch, removeEmail } = useHygieneEmails();
+  const { m365: m365Connected } = useConnections();
 
   return (
     <section className="glass-card anim-card p-5" style={{ animationDelay: "120ms" }}>
       <h2 className="flex items-center gap-2 text-sm font-semibold text-text-heading mb-4">
         <span>📧</span>
         Other Inbox
-        {!loading && (
+        {m365Connected && !loading && (
           <span className="text-[10px] bg-white/5 text-text-muted px-2 py-0.5 rounded-full">
             {emails.length}
           </span>
         )}
-        <button
-          onClick={refetch}
-          className="ml-auto text-[10px] text-text-muted hover:text-accent-amber transition-colors px-2 py-1 rounded-md hover:bg-[var(--accent-amber-dim)] cursor-pointer"
-        >
-          Refresh
-        </button>
+        {m365Connected && (
+          <button
+            onClick={refetch}
+            className="ml-auto text-[10px] text-text-muted hover:text-accent-amber transition-colors px-2 py-1 rounded-md hover:bg-[var(--accent-amber-dim)] cursor-pointer"
+          >
+            Refresh
+          </button>
+        )}
       </h2>
 
-      {loading ? (
+      {!m365Connected ? (
+        <ConnectPrompt service="Microsoft 365" />
+      ) : loading ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-10 rounded-md bg-white/5 animate-pulse" />
