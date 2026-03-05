@@ -7,6 +7,7 @@ import { ExternalLinkIcon } from "@/components/ui/icons";
 import { useEmails } from "@/hooks/useEmails";
 import { useTasks } from "@/hooks/useTasks";
 import { useChats } from "@/hooks/useChats";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ReplyItem {
   id: string;
@@ -58,6 +59,8 @@ export function ReplyCenter() {
   const { emails, loading: emailsLoading } = useEmails();
   const { tasks, loading: tasksLoading } = useTasks();
   const { chats, loading: chatsLoading } = useChats();
+  const { user } = useAuth();
+  const fullName = user?.user_metadata?.full_name ?? "";
 
   const loading = emailsLoading || tasksLoading || chatsLoading;
 
@@ -89,7 +92,7 @@ export function ReplyCenter() {
 
     // ── Teams Chats ───────────────────────────────────────────────────
     const filteredChats = chats.filter(chat => {
-      if (chat.topic === 'Ari Supran' && chat.last_message_from === 'Ari Supran') return false;
+      if (fullName && chat.topic === fullName && chat.last_message_from === fullName) return false;
       if (chat.topic === 'Teams Chat' && !chat.last_message_preview) return false;
       return true;
     });
@@ -136,7 +139,7 @@ export function ReplyCenter() {
       if (!a.isUnread && b.isUnread) return 1;
       return a.daysAgo - b.daysAgo;
     });
-  }, [emails, tasks, chats]);
+  }, [emails, tasks, chats, fullName]);
 
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());

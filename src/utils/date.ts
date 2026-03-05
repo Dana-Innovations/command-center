@@ -1,4 +1,4 @@
-export function getGreeting(): string {
+export function getGreeting(firstName?: string): string {
   const now = new Date();
   const pstStr = now.toLocaleString('en-US', {
     hour: 'numeric',
@@ -11,7 +11,7 @@ export function getGreeting(): string {
   if (hour >= 12 && hour < 17) greet = 'Good afternoon';
   else if (hour >= 17) greet = 'Good evening';
 
-  return `${greet}, Ari`;
+  return firstName ? `${greet}, ${firstName}` : greet;
 }
 
 export function getFormattedDate(): string {

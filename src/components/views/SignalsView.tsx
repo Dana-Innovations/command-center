@@ -7,9 +7,12 @@ import { useTasks } from "@/hooks/useTasks";
 import { useChats } from "@/hooks/useChats";
 import { transformJeanaItems } from "@/lib/transformers";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 function TeamsChatsCard() {
   const { chats, loading } = useChats();
+  const { user } = useAuth();
+  const fullName = user?.user_metadata?.full_name ?? "";
 
   return (
     <section className="glass-card anim-card p-5">
@@ -32,7 +35,7 @@ function TeamsChatsCard() {
           {chats
             .filter(chat => {
               // Filter out self-chats (topic is own name + sender is self)
-              if (chat.topic === 'Ari Supran' && chat.last_message_from === 'Ari Supran') return false;
+              if (fullName && chat.topic === fullName && chat.last_message_from === fullName) return false;
               // Filter out ghost chats (no topic, no preview, no sender)
               if (chat.topic === 'Teams Chat' && !chat.last_message_preview && !chat.last_message_from) return false;
               return true;

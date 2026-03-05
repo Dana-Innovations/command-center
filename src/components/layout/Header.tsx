@@ -33,11 +33,12 @@ export function Header({
 
   const userInitial = user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? "?";
   const userName = user?.user_metadata?.full_name ?? user?.email ?? "";
+  const firstName = user?.user_metadata?.full_name?.split(" ")[0] ?? "";
 
   // Initialize and update clock every second
   useEffect(() => {
     function update() {
-      setGreeting(getGreeting());
+      setGreeting(getGreeting(firstName));
       setDateStr(getFormattedDate());
       setClock(
         new Date().toLocaleTimeString("en-US", {
@@ -52,7 +53,7 @@ export function Header({
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [firstName]);
 
   // Global "/" key listener for command bar
   useEffect(() => {

@@ -5,6 +5,7 @@ import { useEmails } from './useEmails';
 import { useCalendar } from './useCalendar';
 import { useTasks } from './useTasks';
 import { useChats } from './useChats';
+import { useAuth } from './useAuth';
 
 interface TouchpointItem {
   ch: 'email' | 'teams' | 'asana' | 'slack' | 'meeting';
@@ -78,6 +79,8 @@ export function usePeople() {
   const { events, loading: calLoading } = useCalendar();
   const { tasks, loading: tasksLoading } = useTasks();
   const { chats, loading: chatsLoading } = useChats();
+  const { user } = useAuth();
+  const fullName = user?.user_metadata?.full_name ?? "";
 
   const loading = emailsLoading || calLoading || tasksLoading || chatsLoading;
 
@@ -180,7 +183,7 @@ export function usePeople() {
       const organizer = normalizeName(event.organizer || '');
       if (!organizer) continue;
       if (shouldExclude(organizer, '')) continue;
-      if (/ari|supran/i.test(organizer)) continue;
+      if (fullName && organizer.toLowerCase().includes(fullName.split(' ')[0].toLowerCase())) continue;
 
       upsert(organizer, '', {
         ch: 'meeting',
@@ -243,7 +246,7 @@ export function usePeople() {
     });
 
     return result;
-  }, [emails, events, tasks, chats]);
+  }, [emails, events, tasks, chats, fullName]);
 
   return { people, loading };
 }
