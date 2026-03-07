@@ -22,14 +22,14 @@ export function getCortexRedirectUri(fallbackOrigin?: string): string {
     return explicitRedirectUri;
   }
 
-  const siteUrl = sanitizeValue(process.env.NEXT_PUBLIC_SITE_URL);
-  if (siteUrl) {
-    return `${stripTrailingSlashes(siteUrl)}${CALLBACK_PATH}`;
-  }
-
   const origin = sanitizeValue(fallbackOrigin);
   if (origin) {
     return `${stripTrailingSlashes(origin)}${CALLBACK_PATH}`;
+  }
+
+  const siteUrl = sanitizeValue(process.env.NEXT_PUBLIC_SITE_URL);
+  if (siteUrl) {
+    return `${stripTrailingSlashes(siteUrl)}${CALLBACK_PATH}`;
   }
 
   throw new Error(
