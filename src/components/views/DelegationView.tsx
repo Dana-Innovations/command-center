@@ -9,7 +9,7 @@ import { useSalesforce } from "@/hooks/useSalesforce";
 import { useMonday } from "@/hooks/useMonday";
 import { useEmails } from "@/hooks/useEmails";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { Task, AsanaCommentThread, SalesforceOpportunity, Email } from "@/lib/types";
+import type { Task } from "@/lib/types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -685,6 +685,7 @@ export function DelegationView() {
                       {fmtDue(task.due_on, task.days_overdue)}
                     </span>
                     <ActionChip label="Done" color="green" onClick={() => dismiss(task.id)} />
+                    <ActionChip label="Snooze" color="amber" onClick={() => snooze(task.id)} />
                     <ActionChip label="Open" href={task.permalink_url} />
                   </div>
                 </div>
