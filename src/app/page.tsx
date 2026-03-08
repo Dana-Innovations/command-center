@@ -10,6 +10,7 @@ import { PeopleView } from "@/components/views/PeopleView";
 import { CalendarView } from "@/components/views/CalendarView";
 import { SignalsView } from "@/components/views/SignalsView";
 import { MindensView } from "@/components/views/MindensView";
+import { DelegationView } from "@/components/views/DelegationView";
 import { usePeople } from "@/hooks/usePeople";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
@@ -53,6 +54,7 @@ function HomeContent() {
         {activeTab === "calendar"  && <CalendarView />}
         {activeTab === "signals"   && <SignalsView />}
         {activeTab === "minden"    && <MindensView />}
+        {activeTab === "delegation" && <DelegationView />}
       </main>
 
       <Footer onEodSummary={() => setEodOpen(true)} />
