@@ -13,6 +13,7 @@ import { MindensView } from "@/components/views/MindensView";
 import { DelegationView } from "@/components/views/DelegationView";
 import { MeetingPrepView } from "@/components/views/MeetingPrepView";
 import { RelationshipView } from "@/components/views/RelationshipView";
+import { DigestView } from "@/components/views/DigestView";
 import { usePeople } from "@/hooks/usePeople";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
@@ -27,7 +28,7 @@ export default function Home() {
 }
 
 function HomeContent() {
-  const [activeTab, setActiveTab] = useState<TabId>("priority");
+  const [activeTab, setActiveTab] = useState<TabId>("digest");
   const [eodOpen, setEodOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { loading, fetchedAt, error, refetch } = useLiveData();
@@ -52,6 +53,7 @@ function HomeContent() {
       />
 
       <main className="px-6 pb-8">
+        {activeTab === "digest"    && <DigestView />}
         {activeTab === "priority"  && <PriorityView />}
         {activeTab === "sales"     && <SalesTabView />}
         {activeTab === "metrics"   && <MetricsView />}
