@@ -14,6 +14,7 @@ interface HeaderProps {
   lastSyncedAt?: Date | null;
   syncError?: string | null;
   commandItems?: CommandItem[];
+  onSearchOpen?: () => void;
 }
 
 export function Header({
@@ -22,6 +23,7 @@ export function Header({
   lastSyncedAt = null,
   syncError = null,
   commandItems = [],
+  onSearchOpen,
 }: HeaderProps) {
   const { user, signOut } = useAuth();
   const { loading, error } = useLiveData();
@@ -58,6 +60,12 @@ export function Header({
   // Global "/" key listener for command bar
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      // Cmd+K / Ctrl+K opens global search
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onSearchOpen?.();
+        return;
+      }
       if (
         e.key === "/" &&
         !commandBarOpen &&
@@ -70,7 +78,7 @@ export function Header({
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [commandBarOpen]);
+  }, [commandBarOpen, onSearchOpen]);
 
   // Theme toggle
   const toggleTheme = useCallback(() => {
@@ -113,9 +121,9 @@ export function Header({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCommandBarOpen(true)}
+            onClick={() => onSearchOpen?.()}
             aria-label="Search"
-            title="Search (press /)"
+            title="Search (⌘K)"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />

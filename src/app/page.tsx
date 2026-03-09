@@ -15,6 +15,7 @@ import { MeetingPrepView } from "@/components/views/MeetingPrepView";
 import { RelationshipView } from "@/components/views/RelationshipView";
 import { usePeople } from "@/hooks/usePeople";
 import { EODSummary } from "@/components/modals/EODSummary";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
 
 export default function Home() {
@@ -28,6 +29,7 @@ export default function Home() {
 function HomeContent() {
   const [activeTab, setActiveTab] = useState<TabId>("priority");
   const [eodOpen, setEodOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { loading, fetchedAt, error, refetch } = useLiveData();
   const { people, loading: peopleLoading } = usePeople();
 
@@ -40,6 +42,7 @@ function HomeContent() {
         isSyncing={loading}
         lastSyncedAt={fetchedAt}
         syncError={error}
+        onSearchOpen={() => setSearchOpen(true)}
       />
 
       <TabBar
@@ -63,6 +66,11 @@ function HomeContent() {
 
       <Footer onEodSummary={() => setEodOpen(true)} />
       <EODSummary isOpen={eodOpen} onClose={() => setEodOpen(false)} />
+      <GlobalSearch
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onNavigate={(tab) => setActiveTab(tab as TabId)}
+      />
     </div>
   );
 }
