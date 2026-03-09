@@ -12,6 +12,7 @@ import { SignalsView } from "@/components/views/SignalsView";
 import { MindensView } from "@/components/views/MindensView";
 import { DelegationView } from "@/components/views/DelegationView";
 import { MeetingPrepView } from "@/components/views/MeetingPrepView";
+import { RelationshipView } from "@/components/views/RelationshipView";
 import { usePeople } from "@/hooks/usePeople";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
@@ -52,6 +53,7 @@ function HomeContent() {
         {activeTab === "sales"     && <SalesTabView />}
         {activeTab === "metrics"   && <MetricsView />}
         {activeTab === "people"    && <PeopleView people={people} loading={peopleLoading} />}
+        {activeTab === "relationships" && <RelationshipView />}
         {activeTab === "calendar"  && <CalendarView />}
         {activeTab === "prep"      && <MeetingPrepView />}
         {activeTab === "signals"   && <SignalsView />}
