@@ -119,7 +119,7 @@ export function transformCalendarEvents(events: CalendarEvent[]): CalEvent[] {
     const calEvent: CalEvent = {
       time: formatTimeRange(ev.start_time, ev.end_time),
       title: ev.subject,
-      meta: ev.location || ev.organizer || '',
+      meta: (typeof ev.location === 'string' ? ev.location : '') || (typeof ev.organizer === 'string' ? ev.organizer : '') || '',
       type: isLongest ? 'highlight' : 'normal',
       dotColor: isLongest ? 'amber' : undefined,
       startH: startDec,
@@ -202,11 +202,11 @@ export function transformMeetingPrep(events: CalendarEvent[]): MeetingPrepItem[]
     .map((ev) => ({
       time: formatTimeRange(ev.start_time, ev.end_time),
       name: ev.subject,
-      oneLiner: ev.location
+      oneLiner: ev.location && typeof ev.location === 'string'
         ? ev.location
         : ev.is_online
         ? 'Online meeting'
-        : ev.organizer
+        : ev.organizer && typeof ev.organizer === 'string'
         ? `Organized by ${ev.organizer}`
         : '',
       details: [],

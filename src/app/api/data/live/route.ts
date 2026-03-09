@@ -416,7 +416,8 @@ async function fetchCalendar(token: string, sessionId: string) {
       const endTime = e.end as { dateTime?: string } | null;
       const loc = e.location as { displayName?: string } | null;
       const organizer = e.organizer as {
-        emailAddress?: { name?: string };
+        emailAddress?: { name?: string; address?: string };
+        name?: string;
       } | null;
       const startDt =
         typeof e.start === "string"
@@ -437,13 +438,13 @@ async function fetchCalendar(token: string, sessionId: string) {
         id: e.id,
         event_id: e.id,
         subject: e.subject || "(no title)",
-        location: loc?.displayName || (e.location as string) || "",
+        location: loc?.displayName || (typeof e.location === "string" ? e.location : ""),
         start_time: normalizedStart,
         end_time: normalizedEnd,
         is_all_day:
           Boolean(e.isAllDay) ||
           (startDt.includes("T00:00:00") && endDt.includes("T00:00:00")),
-        organizer: organizer?.emailAddress?.name || "",
+        organizer: organizer?.emailAddress?.name || organizer?.name || (typeof e.organizer === "string" ? e.organizer : ""),
         is_online: e.isOnlineMeeting as boolean,
         join_url:
           (e.onlineMeetingUrl as string) || (e.webLink as string) || "",
