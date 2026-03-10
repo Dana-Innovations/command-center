@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { DM_Sans, Playfair_Display } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { DM_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
@@ -9,15 +9,24 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
-const playfairDisplay = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-playfair",
-  display: "swap",
-});
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
-  title: "Executive Command Center",
-  description: "Sonance executive dashboard — unified view of communications, tasks, calendar, and strategic priorities.",
+  title: "Command Center | Sonance",
+  description: "Sonance executive command center — unified view of communications, tasks, calendar, and strategic priorities.",
+  icons: {
+    icon: "https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png",
+    apple: "https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Command Center",
+  },
 };
 
 export default function RootLayout({
@@ -28,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${dmSans.variable} ${playfairDisplay.variable} antialiased`}
+        className={`${dmSans.variable} antialiased`}
       >
         <ToastProvider>
           {children}

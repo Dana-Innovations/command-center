@@ -38,18 +38,18 @@ const STAGE_ORDER = [
 
 const STAGE_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   "Qualification":     { bg: "rgba(102,102,102,0.75)", border: "#666",    text: "text-[#999]",       badge: "bg-[rgba(102,102,102,0.15)] text-[#999]" },
-  "Discovery":         { bg: "rgba(212,164,76,0.75)",  border: "#D4A44C", text: "text-accent-amber", badge: "bg-accent-amber/15 text-accent-amber" },
+  "Discovery":         { bg: "rgba(0,163,225,0.75)",  border: "#00A3E1", text: "text-accent-amber", badge: "bg-accent-amber/15 text-accent-amber" },
   "Rendering":         { bg: "rgba(54,162,235,0.65)",  border: "#36A2EB", text: "text-[#5BB5F5]",    badge: "bg-[rgba(54,162,235,0.15)] text-[#5BB5F5]" },
   "Prototype":         { bg: "rgba(160,120,220,0.65)", border: "#A078DC", text: "text-[#C4A8F0]",    badge: "bg-[rgba(160,120,220,0.15)] text-[#C4A8F0]" },
   "Engineering":       { bg: "rgba(255,159,64,0.65)",  border: "#FF9F40", text: "text-[#FFB870]",    badge: "bg-[rgba(255,159,64,0.15)] text-[#FFB870]" },
-  "Quote Created":     { bg: "rgba(78,205,196,0.65)",  border: "#4ECDC4", text: "text-accent-teal",  badge: "bg-accent-teal/15 text-accent-teal" },
-  "Proposal":          { bg: "rgba(78,205,196,0.75)",  border: "#4ECDC4", text: "text-accent-teal",  badge: "bg-accent-teal/15 text-accent-teal" },
+  "Quote Created":     { bg: "rgba(0,163,225,0.65)",  border: "#00A3E1", text: "text-accent-teal",  badge: "bg-accent-teal/15 text-accent-teal" },
+  "Proposal":          { bg: "rgba(0,163,225,0.75)",  border: "#00A3E1", text: "text-accent-teal",  badge: "bg-accent-teal/15 text-accent-teal" },
   "Proof of Concept":  { bg: "rgba(0,112,210,0.65)",   border: "#0070D2", text: "text-[#5BB5F5]",    badge: "bg-[rgba(0,112,210,0.15)] text-[#5BB5F5]" },
   "Design Review":     { bg: "rgba(153,102,255,0.65)", border: "#9966FF", text: "text-[#B899FF]",    badge: "bg-[rgba(153,102,255,0.15)] text-[#B899FF]" },
   "Pending Order":     { bg: "rgba(232,93,93,0.75)",   border: "#E85D5D", text: "text-accent-red",   badge: "bg-accent-red/15 text-accent-red" },
-  "Qualified":         { bg: "rgba(90,199,139,0.65)",  border: "#5AC78B", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
-  "Forecasted":        { bg: "rgba(90,199,139,0.75)",  border: "#5AC78B", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
-  "Closed Won":        { bg: "rgba(90,199,139,0.85)",  border: "#5AC78B", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
+  "Qualified":         { bg: "rgba(0,178,169,0.65)",  border: "#00B2A9", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
+  "Forecasted":        { bg: "rgba(0,178,169,0.75)",  border: "#00B2A9", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
+  "Closed Won":        { bg: "rgba(0,178,169,0.85)",  border: "#00B2A9", text: "text-accent-green", badge: "bg-accent-green/15 text-accent-green" },
 };
 
 const DEFAULT_STAGE = { bg: "rgba(102,102,102,0.5)", border: "#666", text: "text-text-muted", badge: "bg-[rgba(102,102,102,0.15)] text-[#999]" };
@@ -277,13 +277,13 @@ export function SalesView() {
 
   // Chart palette
   const PALETTE = [
-    "rgba(0,112,210,0.75)", "rgba(78,205,196,0.75)", "rgba(212,164,76,0.75)",
-    "rgba(232,93,93,0.75)", "rgba(90,199,139,0.75)", "rgba(160,120,220,0.75)",
+    "rgba(0,112,210,0.75)", "rgba(0,163,225,0.75)", "rgba(0,163,225,0.75)",
+    "rgba(232,93,93,0.75)", "rgba(0,178,169,0.75)", "rgba(160,120,220,0.75)",
     "rgba(255,159,64,0.75)", "rgba(54,162,235,0.75)", "rgba(255,99,132,0.75)",
     "rgba(153,102,255,0.75)", "rgba(255,205,86,0.75)", "rgba(201,203,207,0.75)",
   ];
   const PALETTE_BORDER = [
-    "#0070D2", "#4ECDC4", "#D4A44C", "#E85D5D", "#5AC78B", "#A078DC",
+    "#0070D2", "#00A3E1", "#00B2A9", "#E85D5D", "#00B2A9", "#A078DC",
     "#FF9F40", "#36A2EB", "#FF6384", "#9966FF", "#FFCD56", "#C9CBCF",
   ];
 

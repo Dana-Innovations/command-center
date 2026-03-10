@@ -47,45 +47,61 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-      <div className="glass-card max-w-md w-full mx-4 p-8 text-center">
-        <h1 className="font-display text-2xl font-semibold text-text-heading mb-2">
-          Executive Command Center
-        </h1>
-        <p className="text-sm text-text-muted mb-8">
-          Sign in with your Sonance employee account
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-[#1a2028]">
+      <div className="max-w-md w-full mx-4">
+        {/* Logo and Brand */}
+        <div className="text-center mb-8">
+          <img
+            src="https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png"
+            alt="Sonance"
+            className="h-10 w-auto mx-auto mb-6"
+          />
+          <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">
+            Command Center
+          </h1>
+          <p className="text-sm text-[#6B7C8A]">
+            Executive dashboard for Sonance leadership
+          </p>
+        </div>
 
-        {error && (
-          <div className="mb-6 p-3 rounded-lg bg-accent-red/10 border border-accent-red/20 text-sm text-accent-red">
-            {ERROR_MESSAGES[error] || decodeURIComponent(error)}
-          </div>
-        )}
+        {/* Login Card */}
+        <div className="glass-card p-8">
+          {error && (
+            <div className="mb-6 p-3 rounded-lg bg-accent-red/10 border border-accent-red/20 text-sm text-accent-red">
+              {ERROR_MESSAGES[error] || decodeURIComponent(error)}
+            </div>
+          )}
 
-        <button
-          onClick={handleSignIn}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl bg-[#2F2F2F] hover:bg-[#3a3a3a] text-white font-medium transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <button
+            onClick={handleSignIn}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-[#00A3E1] hover:bg-[#0090C8] text-white font-medium transition-colors cursor-pointer disabled:opacity-50"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-          {loading ? "Redirecting..." : "Sign in with Cortex"}
-        </button>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+            {loading ? "Redirecting..." : "Sign in with Cortex"}
+          </button>
 
-        <p className="text-xs text-text-muted mt-6">
-          Invite-only access. Contact your administrator if you need an account.
+          <p className="text-xs text-[#6B7C8A] mt-6 text-center">
+            Invite-only access. Contact your administrator if you need an account.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <p className="text-xs text-[#4A5568] mt-8 text-center">
+          Sonance Internal Tool
         </p>
       </div>
     </div>
@@ -96,8 +112,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-          <div className="text-text-muted">Loading...</div>
+        <div className="min-h-screen flex items-center justify-center bg-[#1a2028]">
+          <div className="text-[#6B7C8A]">Loading...</div>
         </div>
       }
     >

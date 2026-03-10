@@ -4,50 +4,55 @@
 @variant dark (&:where(.dark, .dark *));
 
 /* ============================================
-   EXECUTIVE COMMAND CENTER — DESIGN TOKENS
-   Merges Sonance brand system with executive dashboard aesthetics
+   SONANCE COMMAND CENTER — DESIGN TOKENS
+   Full Sonance brand identity for executive dashboard
    ============================================ */
 
 :root {
-  /* Sonance Core */
+  /* Safe area for iPhone notch/home indicator */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Sonance Brand Core */
   --sonance-charcoal: #333F48;
   --sonance-blue: #00A3E1;
+  --sonance-green: #00B2A9;
   --sonance-light-gray: #D9D9D6;
 
-  /* Executive Dashboard Accents */
-  --accent-amber: #D4A44C;
-  --accent-amber-dim: rgba(212, 164, 76, 0.15);
-  --accent-teal: #4ECDC4;
-  --accent-teal-dim: rgba(78, 205, 196, 0.12);
+  /* Executive Dashboard Accents (mapped to Sonance palette) */
+  --accent-amber: #00A3E1;
+  --accent-amber-dim: rgba(0, 163, 225, 0.15);
+  --accent-teal: #00A3E1;
+  --accent-teal-dim: rgba(0, 163, 225, 0.12);
   --accent-red: #E85D5D;
   --accent-red-dim: rgba(232, 93, 93, 0.12);
-  --accent-green: #5AC78B;
-  --accent-bright-green: #7FE8A6;
-  --accent-gray: #666;
+  --accent-green: #00B2A9;
+  --accent-bright-green: #00D4C8;
+  --accent-gray: #8899A6;
 
   /* Light Mode Defaults */
-  --bg-primary: #FAFAFA;
-  --bg-secondary: #F0F0F0;
+  --bg-primary: #F5F6F7;
+  --bg-secondary: #ECEEF0;
   --bg-card: rgba(255, 255, 255, 0.95);
-  --bg-card-border: rgba(0, 0, 0, 0.08);
-  --bg-card-hover-border: rgba(212, 164, 76, 0.35);
+  --bg-card-border: rgba(51, 63, 72, 0.10);
+  --bg-card-hover-border: rgba(0, 163, 225, 0.35);
   --bg-card-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  --text-heading: #1A1A1A;
-  --text-body: #444;
-  --text-muted: #888;
+  --text-heading: #333F48;
+  --text-body: #4A5568;
+  --text-muted: #8899A6;
   --glass-backdrop: blur(0px);
   --grain-opacity: 0;
   --progress-bg: rgba(0,0,0,0.06);
-  --draft-bg: rgba(212, 164, 76, 0.08);
-  --tab-bg: rgba(0,0,0,0.04);
-  --tab-active-bg: rgba(212, 164, 76, 0.12);
-  --timeline-line: rgba(0,0,0,0.1);
-  --link-color: #9a7630;
-  --link-hover: #7a5d24;
+  --draft-bg: rgba(0, 163, 225, 0.08);
+  --tab-bg: rgba(51, 63, 72, 0.04);
+  --tab-active-bg: rgba(0, 163, 225, 0.12);
+  --timeline-line: rgba(51, 63, 72, 0.12);
+  --link-color: #00A3E1;
+  --link-hover: #0082B4;
 
   /* Typography */
-  --font-body: 'DM Sans', system-ui, sans-serif;
-  --font-display: 'Playfair Display', serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
   /* Tailwind theme mappings */
   --background: var(--bg-primary);
@@ -55,30 +60,31 @@
   --card: var(--bg-card);
   --card-border: var(--bg-card-border);
   --border: var(--bg-card-border);
-  --primary: var(--accent-amber);
-  --primary-foreground: #0d0d0d;
+  --primary: var(--sonance-blue);
+  --primary-foreground: #ffffff;
 }
 
-/* Dark Mode */
+/* Dark Mode — Sonance Charcoal Family */
 .dark {
-  --bg-primary: #0d0d0d;
-  --bg-secondary: #151515;
-  --bg-card: rgba(25, 25, 25, 0.7);
-  --bg-card-border: rgba(212, 164, 76, 0.12);
-  --bg-card-hover-border: rgba(212, 164, 76, 0.28);
+  --bg-primary: #1a2028;
+  --bg-secondary: #1e2730;
+  --bg-elevated: #242f3a;
+  --bg-card: rgba(30, 39, 48, 0.75);
+  --bg-card-border: rgba(217, 217, 214, 0.10);
+  --bg-card-hover-border: rgba(0, 163, 225, 0.30);
   --bg-card-shadow: 0 4px 24px rgba(0,0,0,0.3);
   --text-heading: #FFFFFF;
-  --text-body: #B8B8B8;
-  --text-muted: #777;
+  --text-body: #D9D9D6;
+  --text-muted: #8f999f;
   --glass-backdrop: blur(16px);
-  --grain-opacity: 0.035;
+  --grain-opacity: 0.025;
   --progress-bg: rgba(255,255,255,0.06);
-  --draft-bg: rgba(212, 164, 76, 0.06);
+  --draft-bg: rgba(0, 163, 225, 0.06);
   --tab-bg: rgba(255,255,255,0.04);
-  --tab-active-bg: rgba(212, 164, 76, 0.1);
+  --tab-active-bg: rgba(0, 163, 225, 0.12);
   --timeline-line: rgba(255,255,255,0.08);
-  --link-color: rgba(212, 164, 76, 0.85);
-  --link-hover: #D4A44C;
+  --link-color: rgba(0, 163, 225, 0.85);
+  --link-hover: #00A3E1;
   --background: var(--bg-primary);
   --foreground: var(--text-body);
   --card: var(--bg-card);
@@ -98,6 +104,10 @@
   --color-accent-teal: var(--accent-teal);
   --color-accent-red: var(--accent-red);
   --color-accent-green: var(--accent-green);
+  --color-sonance-blue: var(--sonance-blue);
+  --color-sonance-charcoal: var(--sonance-charcoal);
+  --color-sonance-green: var(--sonance-green);
+  --color-sonance-gray: var(--sonance-light-gray);
   --color-text-heading: var(--text-heading);
   --color-text-body: var(--text-body);
   --color-text-muted: var(--text-muted);
@@ -151,10 +161,10 @@ body {
 .score-gray { color: var(--accent-gray); }
 
 /* Source Tags */
-.tag-email { background: rgba(212,164,76,0.12); color: var(--accent-amber); }
-.tag-teams { background: rgba(78,205,196,0.12); color: var(--accent-teal); }
+.tag-email { background: rgba(0,163,225,0.12); color: var(--accent-amber); }
+.tag-teams { background: rgba(0,163,225,0.12); color: var(--accent-teal); }
 .tag-asana { background: rgba(232,93,93,0.12); color: var(--accent-red); }
-.tag-slack { background: rgba(90,199,139,0.12); color: var(--accent-green); }
+.tag-slack { background: rgba(0,178,169,0.12); color: var(--accent-green); }
 .tag-salesforce { background: rgba(0,112,210,0.12); color: #0070D2; }
 
 /* Progress Bars */
@@ -196,6 +206,10 @@ body {
 /* Refresh animation */
 @keyframes spin { to { transform: rotate(360deg); } }
 .refreshing .refresh-icon { animation: spin 1s linear infinite; }
+
+/* Mobile-first: bottom nav safe area padding */
+.pb-safe { padding-bottom: var(--safe-bottom); }
+.mb-safe { margin-bottom: var(--safe-bottom); }
 
 /* Print */
 @media print {

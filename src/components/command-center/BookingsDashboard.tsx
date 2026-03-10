@@ -25,7 +25,7 @@ function Sparkline({ data }: { data: number[] }) {
   });
   const polyline = points.join(" ");
   const lastPct = data[data.length - 1];
-  const sparkColor = lastPct >= 70 ? "#5AC78B" : lastPct >= 40 ? "#D4A44C" : "#E85D5D";
+  const sparkColor = lastPct >= 70 ? "#00B2A9" : lastPct >= 40 ? "#00A3E1" : "#E85D5D";
   const lastY = h - ((data[data.length - 1] - min) / range) * h;
 
   return (

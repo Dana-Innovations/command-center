@@ -52,7 +52,7 @@ function HomeContent() {
         className="mb-5"
       />
 
-      <main className="px-6 pb-8">
+      <main className="px-4 md:px-6 pb-24 md:pb-8">
         {activeTab === "digest"    && <DigestView />}
         {activeTab === "priority"  && <PriorityView />}
         {activeTab === "sales"     && <SalesTabView />}
