@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, startTransition } from "react";
 import { cn } from "@/lib/utils";
 import { usePeople } from "@/hooks/usePeople";
 import { useSalesforce } from "@/hooks/useSalesforce";
@@ -431,7 +431,7 @@ function RelationshipPanel({ contact, onClose }: { contact: RelationshipContact;
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
-      if (saved) setNotes(saved);
+      if (saved) startTransition(() => setNotes(saved));
     } catch { /* ignore */ }
   }, [storageKey]);
 

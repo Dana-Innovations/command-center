@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks } from "@/hooks/useTasks";
@@ -116,16 +116,18 @@ function dueBadgeColor(task: Task): string {
 interface DelegationPersistedState {
   dismissedIds: string[];
   snoozedUntil: Record<string, number>;
+  selectedProjects: string[];
 }
 
 function loadPersistedState(key: string): DelegationPersistedState {
-  if (typeof window === "undefined") return { dismissedIds: [], snoozedUntil: {} };
+  const defaults: DelegationPersistedState = { dismissedIds: [], snoozedUntil: {}, selectedProjects: [] };
+  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return { dismissedIds: [], snoozedUntil: {} };
-    return JSON.parse(raw);
+    if (!raw) return defaults;
+    return { ...defaults, ...JSON.parse(raw) };
   } catch {
-    return { dismissedIds: [], snoozedUntil: {} };
+    return defaults;
   }
 }
 
@@ -319,6 +321,47 @@ export function DelegationView() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [personFilter, setPersonFilter] = useState("");
+  const [showBoardMenu, setShowBoardMenu] = useState(false);
+  const boardMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close board menu on outside click
+  useEffect(() => {
+    if (!showBoardMenu) return;
+    function handler(e: MouseEvent) {
+      if (boardMenuRef.current && !boardMenuRef.current.contains(e.target as Node)) {
+        setShowBoardMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showBoardMenu]);
+
+  // Available Asana projects
+  const availableProjects = useMemo(
+    () => Array.from(new Set(tasks.map((t) => t.project_name).filter(Boolean))).sort() as string[],
+    [tasks]
+  );
+
+  const toggleProject = useCallback(
+    (name: string) => {
+      setPersisted((prev) => {
+        const cur = prev.selectedProjects;
+        const next = cur.includes(name) ? cur.filter((p) => p !== name) : [...cur, name];
+        const updated = { ...prev, selectedProjects: next };
+        savePersistedState(storageKey, updated);
+        return updated;
+      });
+    },
+    [storageKey]
+  );
+
+  const isProjectIncluded = useCallback(
+    (task: Task): boolean => {
+      if (persisted.selectedProjects.length === 0) return true;
+      return persisted.selectedProjects.includes(task.project_name ?? "");
+    },
+    [persisted.selectedProjects]
+  );
 
   // User identity matching
   const isUserMatch = useCallback(
@@ -339,7 +382,7 @@ export function DelegationView() {
 
   const myMonkeys = useMemo(() => {
     let result = activeTasks.filter(
-      (t) => (isUserMatch(t.assignee_email) || isUserMatch(t.assignee_name ?? t.assignee)) && !isAsanaGorilla(t)
+      (t) => (isUserMatch(t.assignee_email) || isUserMatch(t.assignee_name ?? t.assignee)) && !isAsanaGorilla(t) && isProjectIncluded(t)
     );
     if (sourceFilter !== "all" && sourceFilter !== "asana") result = [];
     if (statusFilter === "overdue") result = result.filter((t) => t.days_overdue > 0);
@@ -351,7 +394,7 @@ export function DelegationView() {
       if (a.days_overdue > 0 && b.days_overdue > 0) return b.days_overdue - a.days_overdue;
       return (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999");
     });
-  }, [activeTasks, isUserMatch, sourceFilter, statusFilter, personFilter]);
+  }, [activeTasks, isUserMatch, sourceFilter, statusFilter, personFilter, isProjectIncluded]);
 
   const delegatedMonkeys = useMemo(() => {
     let result = activeTasks.filter(
@@ -360,7 +403,8 @@ export function DelegationView() {
         !isUserMatch(t.assignee_email) &&
         !isUserMatch(t.assignee_name ?? t.assignee) &&
         (t.assignee_name || t.assignee) &&
-        !isAsanaGorilla(t)
+        !isAsanaGorilla(t) &&
+        isProjectIncluded(t)
     );
     if (sourceFilter !== "all" && sourceFilter !== "asana") result = [];
     if (statusFilter === "overdue") result = result.filter((t) => t.days_overdue > 0);
@@ -371,12 +415,13 @@ export function DelegationView() {
       const bStale = daysSince(b.modified_at) ?? 0;
       return bStale - aStale;
     });
-  }, [activeTasks, isUserMatch, sourceFilter, statusFilter, personFilter]);
+  }, [activeTasks, isUserMatch, sourceFilter, statusFilter, personFilter, isProjectIncluded]);
 
   const waitingBlocked = useMemo(() => {
     let result = activeTasks.filter((t) => {
       if (isUserMatch(t.assignee_email) || isUserMatch(t.assignee_name ?? t.assignee)) return false;
       if (isUserMatch(t.created_by_email)) return false;
+      if (!isProjectIncluded(t)) return false;
       const isFollower =
         t.follower_names?.some((n) => isUserMatch(n)) ||
         t.follower_emails?.some((e) => isUserMatch(e));
@@ -388,7 +433,7 @@ export function DelegationView() {
     if (sourceFilter !== "all" && sourceFilter !== "asana") result = [];
     if (personFilter) result = result.filter((t) => t.assignee_name === personFilter);
     return result.sort((a, b) => (daysSince(b.modified_at) ?? 0) - (daysSince(a.modified_at) ?? 0));
-  }, [activeTasks, isUserMatch, sourceFilter, personFilter]);
+  }, [activeTasks, isUserMatch, sourceFilter, personFilter, isProjectIncluded]);
 
   // Gorillas
   const gorillas = useMemo(() => {
@@ -434,6 +479,7 @@ export function DelegationView() {
     if (sourceFilter === "all" || sourceFilter === "asana") {
       for (const task of activeTasks) {
         if (!isAsanaGorilla(task)) continue;
+        if (!isProjectIncluded(task)) continue;
         if (personFilter && task.assignee_name !== personFilter && task.created_by_name !== personFilter) continue;
         if (statusFilter === "overdue" && task.days_overdue <= 0) continue;
         if (statusFilter === "stale" && !isStale(task.modified_at)) continue;
@@ -455,7 +501,7 @@ export function DelegationView() {
     }
 
     return items.sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
-  }, [opportunities, orders, activeTasks, sourceFilter, statusFilter, personFilter]);
+  }, [opportunities, orders, activeTasks, sourceFilter, statusFilter, personFilter, isProjectIncluded]);
 
   // Needs my input
   const needsInput = useMemo(() => {
@@ -698,6 +744,79 @@ export function DelegationView() {
             </option>
           ))}
         </select>
+
+        {availableProjects.length > 0 && (
+          <>
+            <div className="w-px h-5 bg-white/10" />
+
+            {/* Board filter */}
+            <div className="relative" ref={boardMenuRef}>
+              <button
+                onClick={() => setShowBoardMenu((v) => !v)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer",
+                  persisted.selectedProjects.length > 0
+                    ? "bg-accent-amber/15 text-accent-amber"
+                    : "bg-white/5 text-text-muted hover:text-text-body"
+                )}
+              >
+                {persisted.selectedProjects.length === 0
+                  ? "Boards: All"
+                  : `Boards: ${persisted.selectedProjects.length}`}
+              </button>
+
+              {showBoardMenu && (
+                <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] max-w-[280px] rounded-xl border border-white/10 bg-[var(--bg-card)] shadow-xl p-2 space-y-0.5">
+                  <button
+                    onClick={() => {
+                      setPersisted((prev) => {
+                        const updated = { ...prev, selectedProjects: [] };
+                        savePersistedState(storageKey, updated);
+                        return updated;
+                      });
+                    }}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                      persisted.selectedProjects.length === 0
+                        ? "bg-accent-amber/15 text-accent-amber"
+                        : "text-text-muted hover:text-text-body hover:bg-white/5"
+                    )}
+                  >
+                    All Boards
+                  </button>
+                  <div className="h-px bg-white/10 my-1" />
+                  {availableProjects.map((name) => {
+                    const checked = persisted.selectedProjects.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => toggleProject(name)}
+                        className={cn(
+                          "w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors",
+                          checked ? "text-text-body" : "text-text-muted hover:text-text-body hover:bg-white/5"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center",
+                            checked ? "bg-accent-amber border-accent-amber" : "border-white/20"
+                          )}
+                        >
+                          {checked && (
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                              <path d="M1 4l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="truncate">{name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── KPI Row ─────────────────────────────────────────────────────────── */}

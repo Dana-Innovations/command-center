@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from "react";
 import { useLiveData } from "@/lib/live-data-context";
 import { usePeople, type Person } from "@/hooks/usePeople";
 import type {
@@ -74,7 +74,7 @@ export function useGlobalSearch() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(RECENT_KEY);
-      if (stored) setRecentSearches(JSON.parse(stored));
+      if (stored) startTransition(() => setRecentSearches(JSON.parse(stored)));
     } catch { /* ignore */ }
   }, []);
 
