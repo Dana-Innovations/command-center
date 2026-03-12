@@ -84,6 +84,7 @@ export function usePeople() {
   const { slack } = useLiveData();
   const { user } = useAuth();
   const fullName = user?.user_metadata?.full_name ?? "";
+  const userEmail = user?.email?.toLowerCase() ?? "";
 
   const loading = emailsLoading || calLoading || tasksLoading || chatsLoading;
   const [now] = useState(() => Date.now());
@@ -127,6 +128,8 @@ export function usePeople() {
       const name = normalizeName(rawName);
       const addr = email.from_email || '';
       if (!name || shouldExclude(name, addr)) continue;
+      if (isOwnName(name, fullName)) continue;
+      if (userEmail && addr.toLowerCase() === userEmail) continue;
 
       const daysAgo = Math.floor((now - new Date(email.received_at).getTime()) / 86400000);
       const urgencyLevel = daysAgo < 1 ? 2 : daysAgo < 7 ? 1 : 0;
@@ -147,6 +150,8 @@ export function usePeople() {
       const name = normalizeName(rawName);
       const addr = email.to_email || '';
       if (!name || shouldExclude(name, addr)) continue;
+      if (isOwnName(name, fullName)) continue;
+      if (userEmail && addr.toLowerCase() === userEmail) continue;
 
       const sentMs = new Date(email.received_at).getTime();
       if (sentMs < sevenDaysAgo) continue;
@@ -330,6 +335,8 @@ export function usePeople() {
     const result: Person[] = [];
     for (const [, p] of map) {
       if (p.items.length === 0) continue;
+      if (isOwnName(p.name, fullName)) continue;
+      if (userEmail && p.email && p.email.toLowerCase() === userEmail) continue;
 
       // Sort items chronologically (newest first)
       p.items.sort((a, b) => {
@@ -381,7 +388,7 @@ export function usePeople() {
     });
 
     return result;
-  }, [emails, sentEmails, events, chats, slack, tasks, fullName, now]);
+  }, [emails, sentEmails, events, chats, slack, tasks, fullName, userEmail, now]);
 
   return { people, loading };
 }
