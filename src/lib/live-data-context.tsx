@@ -15,6 +15,7 @@ import type {
   CalendarEvent,
   Task,
   AsanaCommentThread,
+  AsanaProject,
   SalesforceOpportunity,
   Chat,
   SlackFeedMessage,
@@ -35,6 +36,7 @@ interface LiveDataState {
   calendar: CalendarEvent[];
   tasks: Task[];
   asanaComments: AsanaCommentThread[];
+  asanaProjects: AsanaProject[];
   opportunities: SalesforceOpportunity[];
   chats: Chat[];
   slack: SlackFeedMessage[];
@@ -96,6 +98,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [asanaComments, setAsanaComments] = useState<AsanaCommentThread[]>([]);
+  const [asanaProjects, setAsanaProjects] = useState<AsanaProject[]>([]);
   const [opportunities, setOpportunities] = useState<SalesforceOpportunity[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [slack, setSlack] = useState<SlackFeedMessage[]>([]);
@@ -265,7 +268,19 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
 
       const request = (async () => {
         try {
-          const res = await fetch("/api/data/live", { cache: "no-store" });
+          let apiUrl = "/api/data/live";
+          try {
+            const stored = window.localStorage.getItem("my-monkeys:project-filter");
+            if (stored) {
+              const gids: string[] = JSON.parse(stored);
+              if (Array.isArray(gids) && gids.length > 0) {
+                apiUrl += `?projectGids=${gids.join(",")}`;
+              }
+            }
+          } catch {
+            // ignore localStorage errors
+          }
+          const res = await fetch(apiUrl, { cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
           const data = await res.json();
@@ -278,6 +293,9 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
             setCalendar((data.calendar ?? []) as CalendarEvent[]);
             setTasks((data.tasks ?? []) as Task[]);
             setAsanaComments((data.asanaComments ?? []) as AsanaCommentThread[]);
+            if (data.asanaProjects) {
+              setAsanaProjects((data.asanaProjects ?? []) as AsanaProject[]);
+            }
             setOpportunities((data.pipeline ?? []) as SalesforceOpportunity[]);
             setChats((data.chats ?? []) as Chat[]);
             setSlack((data.slack ?? []) as SlackFeedMessage[]);
@@ -425,6 +443,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         calendar,
         tasks,
         asanaComments,
+        asanaProjects,
         opportunities,
         chats,
         slack,

@@ -18,32 +18,50 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function LoginContent() {
   const searchParams = useSearchParams();
-  const error = searchParams.get("error");
+  const urlError = searchParams.get("error");
   const [loading, setLoading] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const error = clientError || urlError;
 
   async function handleSignIn() {
     setLoading(true);
+    setClientError(null);
 
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = crypto.randomUUID();
+    try {
+      const cortexUrl = process.env.NEXT_PUBLIC_CORTEX_URL;
+      const clientId = process.env.NEXT_PUBLIC_CORTEX_CLIENT_ID;
 
-    // Store PKCE verifier and state in cookies for the server-side callback
-    document.cookie = `cortex_code_verifier=${codeVerifier}; path=/; max-age=600; samesite=lax`;
-    document.cookie = `cortex_oauth_state=${state}; path=/; max-age=600; samesite=lax`;
+      if (!cortexUrl || !clientId) {
+        throw new Error(`Missing env vars: CORTEX_URL=${cortexUrl ?? "undefined"}, CLIENT_ID=${clientId ?? "undefined"}`);
+      }
 
-    const redirectUri = `${window.location.origin}/auth/cortex/callback`;
-    const params = new URLSearchParams({
-      client_id: process.env.NEXT_PUBLIC_CORTEX_CLIENT_ID!,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "profile email mcp:execute mcp:list",
-      state,
-      code_challenge: codeChallenge,
-      code_challenge_method: "S256",
-    });
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const state = crypto.randomUUID();
 
-    window.location.href = `${process.env.NEXT_PUBLIC_CORTEX_URL}/api/v1/oauth2/sso/authorize?${params}`;
+      // Store PKCE verifier and state in cookies for the server-side callback
+      document.cookie = `cortex_code_verifier=${codeVerifier}; path=/; max-age=600; samesite=lax`;
+      document.cookie = `cortex_oauth_state=${state}; path=/; max-age=600; samesite=lax`;
+
+      const redirectUri = `${window.location.origin}/auth/cortex/callback`;
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "profile email mcp:execute mcp:list",
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
+
+      const authUrl = `${cortexUrl}/api/v1/oauth2/sso/authorize?${params}`;
+      console.log("[login] Redirecting to:", authUrl);
+      window.location.href = authUrl;
+    } catch (e) {
+      console.error("[login] Sign in error:", e);
+      setClientError(e instanceof Error ? e.message : "Sign in failed. Check the browser console for details.");
+      setLoading(false);
+    }
   }
 
   return (

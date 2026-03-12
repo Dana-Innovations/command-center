@@ -34,6 +34,11 @@ export interface CalendarEvent {
   synced_at: string;
 }
 
+export interface AsanaProject {
+  gid: string;
+  name: string;
+}
+
 export interface Task {
   id: string;
   task_gid: string;
@@ -53,6 +58,7 @@ export interface Task {
   follower_emails?: string[];
   modified_at?: string | null;
   project_name: string;
+  project_gid?: string | null;
   permalink_url: string;
   priority: string;
   num_subtasks?: number;

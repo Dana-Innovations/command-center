@@ -459,7 +459,7 @@ async function fetchCalendar(token: string, sessionId: string) {
 
 // ─── Asana via Cortex MCP ─────────────────────────────────────────────────
 
-async function fetchAsanaTasks(token: string, sessionId: string) {
+async function fetchAsanaTasks(token: string, sessionId: string, filterGids?: string[]) {
   // Step 1: Discover the user's projects dynamically
   const projectsResult = await cortexCall(
     token,
@@ -471,10 +471,26 @@ async function fetchAsanaTasks(token: string, sessionId: string) {
   const projects: Record<string, unknown>[] =
     projectsResult.projects ?? projectsResult.data ?? [];
 
-  if (projects.length === 0) return [];
+  if (projects.length === 0) return { tasks: [], asanaProjects: [] };
 
-  // Step 2: Fetch tasks from up to 5 projects in parallel
-  const projectSlice = projects.slice(0, 5);
+  // Build the full project list for the settings panel
+  const asanaProjects = projects.map((p) => ({
+    gid: ((p.gid || p.id) as string) || "",
+    name: (p.name as string) || "Untitled",
+  }));
+
+  // Step 2: Determine which projects to fetch tasks from
+  let projectSlice: Record<string, unknown>[];
+  if (filterGids && filterGids.length > 0) {
+    projectSlice = projects.filter((p) =>
+      filterGids.includes((p.gid || p.id) as string)
+    );
+    // Fallback to first 5 if none of the filtered GIDs matched
+    if (projectSlice.length === 0) projectSlice = projects.slice(0, 5);
+  } else {
+    projectSlice = projects.slice(0, 5);
+  }
+
   const taskResults = await Promise.allSettled(
     projectSlice.map((p) =>
       cortexCall(token, sessionId, `asana_${p.gid}`, "asana__list_tasks", {
@@ -494,15 +510,16 @@ async function fetchAsanaTasks(token: string, sessionId: string) {
     if (r.status !== "fulfilled") continue;
     const tasks: Record<string, unknown>[] = r.value.tasks ?? r.value.data ?? [];
     const projectName = (projectSlice[i].name as string) || "Tasks";
+    const projectGid = ((projectSlice[i].gid || projectSlice[i].id) as string) || "";
     for (const t of tasks) {
       const id = (t.gid || t.id) as string;
       if (seen.has(id)) continue;
       seen.add(id);
-      allTasks.push({ ...t, project_name: projectName });
+      allTasks.push({ ...t, project_name: projectName, project_gid: projectGid });
     }
   }
 
-  return allTasks
+  const tasks = allTasks
     .filter((t) => !t.completed)
     .map((t) => {
       const assignee = toAsanaPerson(t.assignee);
@@ -537,12 +554,15 @@ async function fetchAsanaTasks(token: string, sessionId: string) {
         follower_emails: collaborators.map((person) => person.email).filter(Boolean),
         modified_at: (t.modified_at as string) || (t.modifiedAt as string) || null,
         project_name: (t.project_name as string) || "Tasks",
+        project_gid: (t.project_gid as string) || null,
         permalink_url: t.permalink_url,
         priority: "normal",
         days_overdue: daysOverdue,
         synced_at: now,
       };
     });
+
+  return { tasks, asanaProjects };
 }
 
 async function fetchAsanaCommentThreads(
@@ -1229,13 +1249,19 @@ export async function GET(request: NextRequest) {
   }
 
   if (hasAsana) {
-    const tasksPromise = fetchAsanaTasks(cortexToken, sessionId);
-    fetches.tasks = tasksPromise;
-    fetches.asanaComments = tasksPromise.then((tasks) =>
+    const url = new URL(request.url);
+    const projectGidsParam = url.searchParams.get("projectGids");
+    const filterGids = projectGidsParam
+      ? projectGidsParam.split(",").filter(Boolean)
+      : undefined;
+    const asanaPromise = fetchAsanaTasks(cortexToken, sessionId, filterGids);
+    fetches.tasks = asanaPromise.then((result) => result.tasks);
+    fetches.asanaProjects = asanaPromise.then((result) => result.asanaProjects);
+    fetches.asanaComments = asanaPromise.then((result) =>
       fetchAsanaCommentThreads(
         cortexToken,
         sessionId,
-        tasks as Task[],
+        result.tasks as Task[],
         authenticatedUser
       )
     );
@@ -1285,6 +1311,7 @@ export async function GET(request: NextRequest) {
     calendar: resolved.calendar ?? [],
     tasks: resolved.tasks ?? [],
     asanaComments: resolved.asanaComments ?? [],
+    asanaProjects: resolved.asanaProjects ?? [],
     chats: resolved.chats ?? [],
     slack: resolved.slack ?? [],
     powerbi: {
