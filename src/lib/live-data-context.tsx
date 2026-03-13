@@ -284,6 +284,12 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
           const data = await res.json();
+          if (data.errors && Object.keys(data.errors).length > 0) {
+            console.warn("[CommandCenter] API errors:", data.errors);
+          }
+          if (data.skipped && data.skipped.length > 0) {
+            console.info("[CommandCenter] Skipped services:", data.skipped);
+          }
           const nextFetchedAt = new Date(data.fetchedAt ?? Date.now());
           lastFetchedAtRef.current = nextFetchedAt.getTime();
 
