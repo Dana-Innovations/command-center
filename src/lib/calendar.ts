@@ -11,7 +11,23 @@ export function parseCalendarDate(value: string | null | undefined): Date | null
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function normalizeCalendarDateTime(value: unknown): string | null {
+// Map Windows timezone names returned by M365 to IANA identifiers
+const MS_TZ_MAP: Record<string, string> = {
+  "Pacific Standard Time": "America/Los_Angeles",
+  "Mountain Standard Time": "America/Denver",
+  "Central Standard Time": "America/Chicago",
+  "Eastern Standard Time": "America/New_York",
+  "UTC": "UTC",
+  "GMT Standard Time": "Europe/London",
+  "Hawaiian Standard Time": "Pacific/Honolulu",
+  "Alaskan Standard Time": "America/Anchorage",
+  "Atlantic Standard Time": "America/Halifax",
+};
+
+export function normalizeCalendarDateTime(
+  value: unknown,
+  timeZone?: string
+): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -25,6 +41,24 @@ export function normalizeCalendarDateTime(value: unknown): string | null {
   if (DATE_ONLY_RE.test(trimmed)) {
     candidate = `${trimmed}T00:00:00Z`;
   } else if (!HAS_TIMEZONE_RE.test(trimmed)) {
+    if (timeZone) {
+      // Convert from the given timezone to UTC instead of assuming UTC
+      const ianaTz = MS_TZ_MAP[timeZone] || timeZone;
+      try {
+        const naive = new Date(trimmed);
+        if (!Number.isNaN(naive.getTime())) {
+          const utcMs = new Date(
+            naive.toLocaleString("en-US", { timeZone: "UTC" })
+          ).getTime();
+          const tzMs = new Date(
+            naive.toLocaleString("en-US", { timeZone: ianaTz })
+          ).getTime();
+          return new Date(naive.getTime() + (utcMs - tzMs)).toISOString();
+        }
+      } catch {
+        // fallback below
+      }
+    }
     candidate = `${trimmed}Z`;
   }
 

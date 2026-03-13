@@ -97,6 +97,13 @@ function formatPSTTime(d: Date): string {
   });
 }
 
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function formatTimeShort(isoStr: string): string {
   const d = toPacificDate(isoStr);
   if (!d) return "";
@@ -274,7 +281,7 @@ export function DigestView() {
     return () => clearInterval(id);
   }, []);
 
-  const todayStr = useMemo(() => now.toISOString().slice(0, 10), [now]);
+  const todayStr = useMemo(() => formatLocalDate(now), [now]);
 
   const greeting = getGreeting(now.getHours());
   const dateStr = now.toLocaleDateString("en-US", {
@@ -304,7 +311,7 @@ export function DigestView() {
       .filter((e) => {
         const pst = toPacificDate(e.start_time);
         if (!pst) return false;
-        const eventDate = pst.toISOString().slice(0, 10);
+        const eventDate = formatLocalDate(pst);
         return eventDate === todayStr && !e.is_all_day;
       })
       .sort(
@@ -317,18 +324,16 @@ export function DigestView() {
   const upcomingMeetings = useMemo(() => {
     if (!calEvents || todayMeetings.length > 0) return [];
     const pstNow = getPSTNow();
-    const weekOutStr = new Date(
+    const weekOutStr = formatLocalDate(new Date(
       pstNow.getFullYear(),
       pstNow.getMonth(),
       pstNow.getDate() + 7
-    )
-      .toISOString()
-      .slice(0, 10);
+    ));
     return calEvents
       .filter((e) => {
         const pst = toPacificDate(e.start_time);
         if (!pst || e.is_all_day) return false;
-        const eventDate = pst.toISOString().slice(0, 10);
+        const eventDate = formatLocalDate(pst);
         return eventDate > todayStr && eventDate <= weekOutStr;
       })
       .sort(
@@ -346,7 +351,7 @@ export function DigestView() {
     let currentLabel = "";
     for (const ev of upcomingMeetings) {
       const pst = toPacificDate(ev.start_time);
-      const label = pst ? formatRelativeDay(pst.toISOString()) : "Upcoming";
+      const label = pst ? formatRelativeDay(formatLocalDate(pst)) : "Upcoming";
       if (label !== currentLabel) {
         groups.push({ label, events: [] });
         currentLabel = label;
@@ -391,13 +396,11 @@ export function DigestView() {
 
   const weekOutStr = useMemo(() => {
     const pstNow = getPSTNow();
-    return new Date(
+    return formatLocalDate(new Date(
       pstNow.getFullYear(),
       pstNow.getMonth(),
       pstNow.getDate() + 7
-    )
-      .toISOString()
-      .slice(0, 10);
+    ));
   }, [todayStr]);
 
   const { myMonkeys, monkeyFallbackTier } = useMemo(() => {
@@ -706,12 +709,12 @@ export function DigestView() {
     if (!calEvents) return null;
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    const tomorrowStr = formatLocalDate(tomorrow);
     return calEvents
       .filter((e) => {
         const pst = toPacificDate(e.start_time);
         if (!pst) return false;
-        return pst.toISOString().slice(0, 10) === tomorrowStr && !e.is_all_day;
+        return formatLocalDate(pst) === tomorrowStr && !e.is_all_day;
       })
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0] ?? null;
   }, [calEvents, now]);

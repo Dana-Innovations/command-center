@@ -414,13 +414,15 @@ async function fetchCalendar(token: string, sessionId: string) {
 
   return events
     .map((e) => {
-      const start = e.start as { dateTime?: string } | null;
-      const endTime = e.end as { dateTime?: string } | null;
+      const start = e.start as { dateTime?: string; timeZone?: string } | null;
+      const endTime = e.end as { dateTime?: string; timeZone?: string } | null;
       const loc = e.location as { displayName?: string } | null;
       const organizer = e.organizer as {
         emailAddress?: { name?: string; address?: string };
         name?: string;
       } | null;
+      const startTz = start?.timeZone || "";
+      const endTz = endTime?.timeZone || "";
       const startDt =
         typeof e.start === "string"
           ? e.start
@@ -429,8 +431,8 @@ async function fetchCalendar(token: string, sessionId: string) {
         typeof e.end === "string"
           ? e.end
           : endTime?.dateTime || (e.endDateTime as string) || "";
-      const normalizedStart = normalizeCalendarDateTime(startDt);
-      const normalizedEnd = normalizeCalendarDateTime(endDt);
+      const normalizedStart = normalizeCalendarDateTime(startDt, startTz);
+      const normalizedEnd = normalizeCalendarDateTime(endDt, endTz);
 
       if (!normalizedStart || !normalizedEnd) {
         return null;
