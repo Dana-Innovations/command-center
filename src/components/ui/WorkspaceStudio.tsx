@@ -7,6 +7,7 @@ import { useAttention } from "@/lib/attention/client";
 import type {
   AttentionProvider,
   AttentionFeedbackValue,
+  AttentionProfile,
   FocusNode,
   ImportanceTier,
 } from "@/lib/attention/types";
@@ -42,6 +43,66 @@ const PROVIDER_CONNECTION_LABELS: Record<AttentionProvider, string> = {
   teams: "Microsoft 365",
   slack: "Slack",
 };
+
+interface FocusPreviewRecord {
+  key: string;
+  provider: AttentionProvider;
+  entityType: string;
+  entityId: string;
+  label: string;
+  importance: ImportanceTier;
+  assumed: boolean;
+}
+
+function buildFocusPreviewRecords(
+  focusProviders: FocusNode[],
+  profile: AttentionProfile | null
+) {
+  const preview = new Map<string, FocusPreviewRecord>();
+  const saved = profile?.focusPreferences ?? [];
+
+  for (const record of saved) {
+    const key = `${record.provider}::${record.entity_type}::${record.entity_id}`;
+    preview.set(key, {
+      key,
+      provider: record.provider,
+      entityType: record.entity_type,
+      entityId: record.entity_id,
+      label: record.label_snapshot?.trim() ? record.label_snapshot : record.entity_id,
+      importance: record.importance,
+      assumed: false,
+    });
+  }
+
+  const visit = (nodes: FocusNode[]) => {
+    for (const node of nodes) {
+      const skipContainer =
+        node.entityType === "mail_root" || node.entityType === "calendar_root";
+      const key = `${node.provider}::${node.entityType}::${node.entityId}`;
+      const existing = preview.get(key);
+
+      if (!skipContainer && node.importance !== "normal") {
+        preview.set(key, {
+          key,
+          provider: node.provider,
+          entityType: node.entityType,
+          entityId: node.entityId,
+          label: node.label,
+          importance: node.importance,
+          assumed: existing ? false : node.importance === node.inheritedImportance,
+        });
+      }
+
+      if (node.children?.length) {
+        visit(node.children);
+      }
+    }
+  };
+
+  visit(focusProviders);
+
+  return Array.from(preview.values());
+}
 
 function filterNodes(nodes: FocusNode[], query: string): FocusNode[] {
   const trimmed = query.trim().toLowerCase();
@@ -304,16 +365,25 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
   }, [selectedProvider]);
 
   const preview = useMemo(() => {
-    const records = profile?.focusPreferences ?? [];
+    const records = buildFocusPreviewRecords(focusProviders, profile);
     return {
-      rise: records.filter((record) => record.importance === "critical").slice(0, 8),
+      rise: records
+        .filter((record) => record.importance === "critical")
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .slice(0, 8),
       fade: records
         .filter(
           (record) => record.importance === "quiet" || record.importance === "muted"
         )
+        .sort((a, b) => {
+          if (a.importance !== b.importance) {
+            return a.importance === "muted" ? -1 : 1;
+          }
+          return a.label.localeCompare(b.label);
+        })
         .slice(0, 8),
     };
-  }, [profile]);
+  }, [focusProviders, profile]);
 
   const feedbackStats = useMemo(() => {
     const feedback = profile?.feedback ?? [];
@@ -834,14 +904,15 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                     ) : preview.rise.length > 0 ? (
                       preview.rise.map((record) => (
                         <div
-                          key={`${record.provider}-${record.entity_type}-${record.entity_id}`}
+                          key={record.key}
                           className="rounded-2xl border border-accent-green/20 bg-accent-green/10 px-3 py-3 text-sm text-text-body"
                         >
                           <div className="font-medium text-text-heading">
-                            {record.label_snapshot || record.entity_id}
+                            {record.label}
                           </div>
                           <div className="mt-1 text-xs text-text-muted">
-                            {record.provider} · {record.entity_type}
+                            {record.provider} · {record.entityType}
+                            {record.assumed ? " · assumed default" : ""}
                           </div>
                         </div>
                       ))
@@ -865,14 +936,15 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                     ) : preview.fade.length > 0 ? (
                       preview.fade.map((record) => (
                         <div
-                          key={`${record.provider}-${record.entity_type}-${record.entity_id}`}
+                          key={record.key}
                           className="rounded-2xl border border-accent-red/20 bg-accent-red/10 px-3 py-3 text-sm text-text-body"
                         >
                           <div className="font-medium text-text-heading">
-                            {record.label_snapshot || record.entity_id}
+                            {record.label}
                           </div>
                           <div className="mt-1 text-xs text-text-muted">
                             {record.provider} · {record.importance}
+                            {record.assumed ? " · assumed default" : ""}
                           </div>
                         </div>
                       ))

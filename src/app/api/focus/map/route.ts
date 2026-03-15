@@ -11,6 +11,7 @@ import {
   buildFocusLookup,
   buildFocusPreferenceKey,
   buildProviderFocusKey,
+  inferFocusNodeImportance,
 } from "@/lib/attention/utils";
 import {
   getConnections,
@@ -124,13 +125,27 @@ function resolveNodeImportance(
   entityType: string,
   entityId: string,
   lookup: FocusLookup,
-  fallback: ImportanceTier
+  fallback: ImportanceTier,
+  options?: {
+    label?: string;
+    metadata?: Record<string, unknown>;
+  }
 ) {
   const direct = lookup.get(
     buildFocusPreferenceKey(provider, entityType, entityId)
   );
   if (direct) {
     return { importance: direct.importance, inherited: direct.importance };
+  }
+
+  const inferred = inferFocusNodeImportance({
+    provider,
+    entityType,
+    label: options?.label,
+    metadata: options?.metadata,
+  });
+  if (inferred) {
+    return { importance: inferred, inherited: inferred };
   }
 
   const providerValue = lookup.get(buildProviderFocusKey(provider));
@@ -307,7 +322,17 @@ function buildMailTree(
         "mail_folder",
         folderId,
         lookup,
-        root.importance
+        root.importance,
+        {
+          label,
+          metadata: {
+            displayName: label,
+            parentFolderId:
+              typeof folder.parentFolderId === "string"
+                ? folder.parentFolderId
+                : null,
+          },
+        }
       );
 
       return {
@@ -379,7 +404,13 @@ function buildAsanaTree(
           "asana_project",
           gid,
           lookup,
-          node.importance
+          node.importance,
+          {
+            label,
+            metadata: {
+              archived: Boolean(project.archived),
+            },
+          }
         );
 
         return {
@@ -495,7 +526,15 @@ async function buildTeamsTree(args: {
                 "teams_channel",
                 id,
                 args.lookup,
-                targetTeam.importance
+                targetTeam.importance,
+                {
+                  label,
+                  metadata: {
+                    teamId: args.teamId,
+                    webUrl:
+                      typeof channel.webUrl === "string" ? channel.webUrl : null,
+                  },
+                }
               );
 
               return {
@@ -552,7 +591,16 @@ function buildSlackTree(
           "slack_channel",
           id,
           lookup,
-          node.importance
+          node.importance,
+          {
+            label,
+            metadata: {
+              channelName: label,
+              isPrivate: Boolean(channel.is_private),
+              type:
+                typeof channel.type === "string" ? channel.type : "internal",
+            },
+          }
         );
 
         return {

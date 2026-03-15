@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
 
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access on user_settings" ON user_settings;
 CREATE POLICY "Service role full access on user_settings" ON user_settings
     FOR ALL USING (true) WITH CHECK (true);
 
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS user_focus_preferences (
 
 ALTER TABLE user_focus_preferences ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access on user_focus_preferences" ON user_focus_preferences;
 CREATE POLICY "Service role full access on user_focus_preferences" ON user_focus_preferences
     FOR ALL USING (true) WITH CHECK (true);
 
@@ -82,6 +84,7 @@ CREATE TABLE IF NOT EXISTS user_item_feedback (
 
 ALTER TABLE user_item_feedback ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access on user_item_feedback" ON user_item_feedback;
 CREATE POLICY "Service role full access on user_item_feedback" ON user_item_feedback
     FOR ALL USING (true) WITH CHECK (true);
 
@@ -114,6 +117,7 @@ CREATE TABLE IF NOT EXISTS user_feedback_events (
 
 ALTER TABLE user_feedback_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access on user_feedback_events" ON user_feedback_events;
 CREATE POLICY "Service role full access on user_feedback_events" ON user_feedback_events
     FOR ALL USING (true) WITH CHECK (true);
 
@@ -139,6 +143,7 @@ CREATE TABLE IF NOT EXISTS user_priority_biases (
 
 ALTER TABLE user_priority_biases ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access on user_priority_biases" ON user_priority_biases;
 CREATE POLICY "Service role full access on user_priority_biases" ON user_priority_biases
     FOR ALL USING (true) WITH CHECK (true);
 

@@ -27,6 +27,24 @@ const FEEDBACK_UPDATE_WEIGHTS = {
   provider: 0.08,
 } as const;
 
+const ATTENTION_SCHEMA_TABLE_NAMES = [
+  "user_settings",
+  "user_focus_preferences",
+  "user_item_feedback",
+  "user_feedback_events",
+  "user_priority_biases",
+] as const;
+
+export const ATTENTION_SCHEMA_MISSING_MESSAGE =
+  "Focus preferences are not set up in Supabase for this environment yet.";
+
+export function isAttentionSchemaMissingError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return ATTENTION_SCHEMA_TABLE_NAMES.some((tableName) =>
+    message.includes(tableName)
+  );
+}
+
 function asRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)

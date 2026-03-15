@@ -62,6 +62,31 @@ const DIMENSION_MULTIPLIERS = {
 const MAX_FINAL_BIAS = 8;
 const MAX_STORED_BIAS = 4;
 
+const MUTED_MAIL_FOLDERS = new Set([
+  "clutter",
+  "deleted items",
+  "deleteditems",
+  "junk",
+  "junk email",
+  "junkemail",
+  "spam",
+  "trash",
+]);
+
+const QUIET_MAIL_FOLDERS = new Set([
+  "archive",
+  "conversation history",
+  "conversationhistory",
+  "draft",
+  "drafts",
+  "outbox",
+  "rss subscriptions",
+  "rsssubscriptions",
+  "sent",
+  "sent items",
+  "sentitems",
+]);
+
 export function createEmptyUserSettings(
   cortexUserId: string
 ): UserSettingsRecord {
@@ -142,6 +167,51 @@ export function normalizeImportanceTier(value: unknown): ImportanceTier {
     : "normal";
 }
 
+function normalizeFocusLabel(value: string | null | undefined) {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^[^a-z0-9]+/, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function inferMailFolderImportance(
+  folderName: string | null | undefined
+): ImportanceTier | null {
+  const normalized = normalizeFocusLabel(folderName);
+  if (!normalized) return null;
+  if (MUTED_MAIL_FOLDERS.has(normalized)) return "muted";
+  if (QUIET_MAIL_FOLDERS.has(normalized)) return "quiet";
+  return null;
+}
+
+export function inferFocusNodeImportance(args: {
+  provider: AttentionProvider;
+  entityType: string;
+  label?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): ImportanceTier | null {
+  if (args.provider === "outlook_mail" && args.entityType === "mail_folder") {
+    return inferMailFolderImportance(
+      args.label ??
+        (typeof args.metadata?.displayName === "string"
+          ? args.metadata.displayName
+          : null)
+    );
+  }
+
+  if (
+    args.provider === "asana" &&
+    args.entityType === "asana_project" &&
+    args.metadata?.archived === true
+  ) {
+    return "quiet";
+  }
+
+  return null;
+}
+
 export function buildFocusLookup(records: FocusPreferenceRecord[]) {
   return new Map(
     records.map((record) => [
@@ -210,6 +280,19 @@ export function resolveExplicitImportance(
     const record = lookup.get(key);
     if (record) {
       return record.importance;
+    }
+  }
+
+  if (target.provider === "outlook_mail") {
+    const folderName =
+      typeof target.metadata?.folder === "string"
+        ? target.metadata.folder
+        : typeof target.metadata?.displayName === "string"
+          ? target.metadata.displayName
+          : null;
+    const inferred = inferMailFolderImportance(folderName);
+    if (inferred) {
+      return inferred;
     }
   }
 
@@ -309,4 +392,3 @@ export function mergeAttentionSettings(
         : current.preference_version,
   };
 }
-
