@@ -40,7 +40,7 @@ function normalizeTarget(value: unknown): AttentionTarget | null {
 }
 
 export async function POST(request: NextRequest) {
-  const user = getCortexUserFromRequest(request);
+  const user = await getCortexUserFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -85,4 +85,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

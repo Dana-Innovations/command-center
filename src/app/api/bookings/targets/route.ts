@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCortexUserFromRequest } from "@/lib/cortex/user";
 import { createServiceClient } from "@/lib/supabase/server";
 
-function parseUserId(request: NextRequest): string {
-  const raw = request.cookies.get("cortex_user")?.value;
-  if (!raw) return "";
-  try {
-    const parsed = JSON.parse(raw) as { email?: string };
-    return parsed.email ?? "";
-  } catch {
-    return "";
-  }
+async function resolveUserId(request: NextRequest) {
+  const user = await getCortexUserFromRequest(request);
+  return user?.email ?? "";
 }
 
 function currentQuarter(): string {
@@ -19,7 +14,7 @@ function currentQuarter(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const userId = parseUserId(request);
+  const userId = await resolveUserId(request);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -43,7 +38,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = parseUserId(request);
+  const userId = await resolveUserId(request);
   if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

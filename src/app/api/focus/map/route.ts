@@ -579,11 +579,12 @@ function buildSlackTree(
 }
 
 export async function GET(request: NextRequest) {
-  const user = getCortexUserFromRequest(request);
   const token = getCortexToken(request);
-  if (!user || !token) {
+  if (!token) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const user = await getCortexUserFromRequest(request);
 
   try {
     const url = new URL(request.url);
@@ -599,6 +600,10 @@ export async function GET(request: NextRequest) {
     let lookup: FocusLookup = new Map();
 
     try {
+      if (!user) {
+        throw new Error("User identity unavailable");
+      }
+
       const profile = await loadAttentionProfile(user.sub);
       lookup = buildFocusLookup(profile.focusPreferences);
     } catch (error) {

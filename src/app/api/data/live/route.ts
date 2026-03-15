@@ -52,23 +52,6 @@ interface LiveAttentionSelections {
   teamsChannels: FocusSelection[];
 }
 
-function parseCortexUser(request: NextRequest): AuthenticatedUser {
-  const raw = request.cookies.get("cortex_user")?.value;
-  if (!raw) {
-    return { name: "", email: "" };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as { name?: string; email?: string };
-    return {
-      name: parsed.name ?? "",
-      email: parsed.email ?? "",
-    };
-  } catch {
-    return { name: "", email: "" };
-  }
-}
-
 const IMPORTANCE_PRIORITY: Record<ImportanceTier, number> = {
   critical: 3,
   normal: 2,
@@ -1657,8 +1640,11 @@ export async function GET(request: NextRequest) {
 
   const errors: Record<string, string | null> = {};
   const skipped: string[] = [];
-  const authenticatedUser = parseCortexUser(request);
-  const cortexUser = getCortexUserFromRequest(request);
+  const cortexUser = await getCortexUserFromRequest(request);
+  const authenticatedUser: AuthenticatedUser = {
+    name: cortexUser?.name ?? "",
+    email: cortexUser?.email ?? "",
+  };
   let attentionSelections: LiveAttentionSelections = {
     providerImportance: {},
     mailFolders: [],

@@ -1,7 +1,35 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getUserInfo } from "@/lib/cortex/auth";
+import { setCortexUserCookie } from "@/lib/cortex/user";
 
 const PUBLIC_PATHS = ["/login", "/auth/cortex/callback", "/auth/signout"];
 const CORTEX_CLIENT_SECRET = process.env.CORTEX_CLIENT_SECRET;
+
+async function tryHydrateCortexUserCookie(args: {
+  response: NextResponse;
+  accessToken: string;
+  maxAge?: number;
+}) {
+  try {
+    const userInfo = await getUserInfo(args.accessToken);
+    if (!userInfo?.sub) {
+      return;
+    }
+
+    setCortexUserCookie(
+      args.response,
+      {
+        sub: userInfo.sub,
+        name: userInfo.name ?? "",
+        email: userInfo.email ?? "",
+        picture: userInfo.picture,
+      },
+      args.maxAge ?? 3600
+    );
+  } catch {
+    // Best-effort cookie repair; routes can still recover identity from token.
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -78,6 +106,12 @@ export async function middleware(request: NextRequest) {
         });
       }
 
+      await tryHydrateCortexUserCookie({
+        response,
+        accessToken: tokens.access_token,
+        maxAge: tokens.expires_in || 3600,
+      });
+
       // Forward the new access token to API routes via header
       response.headers.set("x-cortex-token", tokens.access_token);
       return response;
@@ -94,6 +128,12 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   if (accessToken) {
     response.headers.set("x-cortex-token", accessToken);
+    if (!request.cookies.get("cortex_user")?.value) {
+      await tryHydrateCortexUserCookie({
+        response,
+        accessToken,
+      });
+    }
   }
   return response;
 }

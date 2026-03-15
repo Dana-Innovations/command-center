@@ -3,20 +3,8 @@ import { streamText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getWritingStyle } from "@/lib/constants";
 import { getCortexToken, cortexCall, cortexInit } from "@/lib/cortex/client";
+import { getCortexUserFromRequest } from "@/lib/cortex/user";
 import { extractEmailDetail } from "@/lib/email-reply";
-
-function parseSignedInEmail(request: NextRequest): string {
-  const rawCookie = request.cookies.get("cortex_user")?.value;
-  if (!rawCookie) return "";
-
-  try {
-    const decoded = decodeURIComponent(rawCookie);
-    const parsed = JSON.parse(decoded) as { email?: string };
-    return parsed.email ?? "";
-  } catch {
-    return "";
-  }
-}
 
 function trimForModel(value: string, max = 6000): string {
   const trimmed = value.trim();
@@ -91,7 +79,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const isAri = parseSignedInEmail(request).toLowerCase() === "ari@sonance.com";
+  const signedInUser = await getCortexUserFromRequest(request);
+  const isAri = signedInUser?.email.toLowerCase() === "ari@sonance.com";
   const systemPrompt = `${getWritingStyle(isAri)}
 
 You are drafting a reply to a ${channel} message.

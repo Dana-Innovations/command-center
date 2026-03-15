@@ -1,5 +1,6 @@
 import { exchangeCodeForTokens, getUserInfo } from "@/lib/cortex/auth";
 import { getCortexRedirectUri } from "@/lib/cortex/redirect";
+import { setCortexUserCookie } from "@/lib/cortex/user";
 import { createServiceClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -86,22 +87,15 @@ export async function GET(request: Request) {
     });
   }
 
-  // Non-httpOnly cookie for client-side user display
-  response.cookies.set(
-    "cortex_user",
-    JSON.stringify({
+  setCortexUserCookie(
+    response,
+    {
       sub: userInfo.sub,
       name: userInfo.name,
       email: userInfo.email,
       picture: userInfo.picture,
-    }),
-    {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: tokens.expires_in || 3600,
-      path: "/",
-    }
+    },
+    tokens.expires_in || 3600
   );
 
   // Clean up PKCE cookies

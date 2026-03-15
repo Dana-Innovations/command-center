@@ -3,7 +3,7 @@ import { loadAttentionProfile, saveAttentionPreferences } from "@/lib/attention/
 import { getCortexUserFromRequest } from "@/lib/cortex/user";
 
 export async function GET(request: NextRequest) {
-  const user = getCortexUserFromRequest(request);
+  const user = await getCortexUserFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const user = getCortexUserFromRequest(request);
+  const user = await getCortexUserFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -47,4 +47,3 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
-
