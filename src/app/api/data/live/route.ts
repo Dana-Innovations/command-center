@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCortexToken, cortexInit, cortexCall } from "@/lib/cortex/client";
+import {
+  getCortexToken,
+  cortexInit,
+  cortexCall,
+  callCortexMCP,
+} from "@/lib/cortex/client";
 import { getConnections, type CortexConnection } from "@/lib/cortex/connections";
 import { normalizeCalendarDateTime } from "@/lib/calendar";
 import type { AsanaCommentThread, Task } from "@/lib/types";
@@ -308,7 +313,7 @@ async function fetchEmails(token: string, sessionId: string) {
     sessionId,
     "emails",
     "m365__list_emails",
-    { limit: 60, folder: "inbox" }
+    { count: 60, folder: "inbox" }
   );
   const emails: Record<string, unknown>[] = result.emails ?? result.value ?? [];
   const now = new Date().toISOString();
@@ -355,7 +360,7 @@ async function fetchSentEmails(token: string, sessionId: string) {
     sessionId,
     "sent_emails",
     "m365__list_emails",
-    { limit: 40, folder: "sentitems" }
+    { count: 40, folder: "sentitems" }
   );
   const emails: Record<string, unknown>[] = result.emails ?? result.value ?? [];
   const now = new Date().toISOString();
@@ -396,26 +401,71 @@ async function fetchCalendar(token: string, sessionId: string) {
   const now = new Date();
   const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const startDate = start.toISOString();
-  const endDate = end.toISOString();
-  const result = await cortexCall(
-    token,
-    sessionId,
-    "cal",
-    "m365__list_events",
-    {
-      start_date: startDate,
-      end_date: endDate,
-      count: 50,
-      limit: 50,
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
+  const calendarArgs = {
+    start_date: startDate,
+    end_date: endDate,
+    count: 200,
+  };
+
+  let result: Record<string, unknown> = {};
+
+  try {
+    result = await cortexCall(
+      token,
+      sessionId,
+      "cal",
+      "m365__list_events",
+      calendarArgs
+    );
+  } catch (error) {
+    console.warn("[live] calendar session fetch failed", {
+      startDate,
+      endDate,
+      error: String(error),
+    });
+  }
+
+  let events = firstArrayProperty(result, ["events", "value", "data"]);
+  const returnedCount =
+    typeof result.count === "number" ? result.count : null;
+
+  if (events.length === 0 && returnedCount !== 0) {
+    try {
+      const fallback = await callCortexMCP(
+        "m365",
+        "list_events",
+        calendarArgs,
+        token
+      );
+
+      if (fallback && typeof fallback === "object") {
+        result = fallback as Record<string, unknown>;
+        events = firstArrayProperty(result, ["events", "value", "data"]);
+      }
+
+      if (events.length > 0) {
+        console.info("[live] calendar recovered via direct m365 MCP", {
+          eventCount: events.length,
+          startDate,
+          endDate,
+        });
+      }
+    } catch (error) {
+      console.warn("[live] calendar direct MCP fallback failed", {
+        startDate,
+        endDate,
+        error: String(error),
+      });
     }
-  );
+  }
+
   if (!result || (!result.events && !result.value)) {
     console.warn("[live] calendar: no events key in response", { keys: Object.keys(result ?? {}), result });
   } else {
-    console.log("[live] calendar result:", { eventCount: (result.events ?? result.value ?? []).length, startDate, endDate });
+    console.log("[live] calendar result:", { eventCount: events.length, startDate, endDate });
   }
-  const events: Record<string, unknown>[] = result.events ?? result.value ?? [];
   const synced = new Date().toISOString();
 
   return events
@@ -451,9 +501,7 @@ async function fetchCalendar(token: string, sessionId: string) {
         location: loc?.displayName || (typeof e.location === "string" ? e.location : ""),
         start_time: normalizedStart,
         end_time: normalizedEnd,
-        is_all_day:
-          Boolean(e.isAllDay) ||
-          (startDt.includes("T00:00:00") && endDt.includes("T00:00:00")),
+        is_all_day: Boolean(e.isAllDay),
         organizer: organizer?.emailAddress?.name || organizer?.name || (typeof e.organizer === "string" ? e.organizer : ""),
         is_online: e.isOnlineMeeting as boolean,
         join_url:
@@ -786,7 +834,7 @@ async function fetchTeamsChats(token: string, sessionId: string) {
     sessionId,
     "teams1",
     "m365__list_chats",
-    { limit: 30 }
+    { count: 30 }
   );
   const chats: Record<string, unknown>[] = result.chats ?? [];
   const now = new Date().toISOString();
@@ -798,7 +846,7 @@ async function fetchTeamsChats(token: string, sessionId: string) {
         sessionId,
         `msg_${chat.id}`,
         "m365__list_chat_messages",
-        { chat_id: chat.id as string, limit: 10 }
+        { chat_id: chat.id as string, count: 10 }
       );
       const messages: Record<string, unknown>[] = msgsResult.messages ?? [];
       const lastMsg = messages[0];

@@ -42,18 +42,18 @@ export function normalizeCalendarDateTime(
     candidate = `${trimmed}T00:00:00Z`;
   } else if (!HAS_TIMEZONE_RE.test(trimmed)) {
     if (timeZone) {
-      // Convert from the given timezone to UTC instead of assuming UTC
       const ianaTz = MS_TZ_MAP[timeZone] || timeZone;
       try {
-        const naive = new Date(trimmed);
-        if (!Number.isNaN(naive.getTime())) {
-          const utcMs = new Date(
-            naive.toLocaleString("en-US", { timeZone: "UTC" })
-          ).getTime();
-          const tzMs = new Date(
-            naive.toLocaleString("en-US", { timeZone: ianaTz })
-          ).getTime();
-          return new Date(naive.getTime() + (utcMs - tzMs)).toISOString();
+        // Parse date/time components directly via Date.UTC to avoid
+        // local-timezone contamination from new Date(string)
+        const parts = trimmed.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (parts) {
+          const utcAnchor = Date.UTC(+parts[1], +parts[2] - 1, +parts[3], +parts[4], +parts[5], +parts[6]);
+          // Treat utcAnchor as "this instant expressed in ianaTz", find the real UTC
+          const asUtcStr = new Date(utcAnchor).toLocaleString("en-US", { timeZone: "UTC" });
+          const asTzStr = new Date(utcAnchor).toLocaleString("en-US", { timeZone: ianaTz });
+          const offset = new Date(asUtcStr).getTime() - new Date(asTzStr).getTime();
+          return new Date(utcAnchor + offset).toISOString();
         }
       } catch {
         // fallback below
