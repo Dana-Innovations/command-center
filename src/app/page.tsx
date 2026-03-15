@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "@/components/layout/Header";
 import { TabBar, type TabId } from "@/components/layout/TabBar";
 import { Footer } from "@/components/layout/Footer";
@@ -16,6 +16,7 @@ import { DigestView } from "@/components/views/DigestView";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
+import { getVisibleTabs } from "@/lib/tab-config";
 
 export default function Home() {
   return (
@@ -30,7 +31,19 @@ function HomeContent() {
   const [eodOpen, setEodOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [prepEventId, setPrepEventId] = useState<string | undefined>();
-  const { loading, fetchedAt, error, refetch } = useLiveData();
+  const { loading, fetchedAt, error, refetch, connections } = useLiveData();
+
+  const visibleTabs = useMemo(
+    () => getVisibleTabs(connections, !!fetchedAt),
+    [connections, fetchedAt]
+  );
+
+  // Redirect to Digest if current tab becomes hidden
+  useEffect(() => {
+    if (fetchedAt && !visibleTabs.includes(activeTab)) {
+      setActiveTab("digest");
+    }
+  }, [visibleTabs, activeTab, fetchedAt]);
 
   const handlePrepNavigate = useCallback((eventId: string) => {
     setPrepEventId(eventId);
@@ -61,6 +74,7 @@ function HomeContent() {
       <TabBar
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        visibleTabIds={visibleTabs}
         className="mb-5"
       />
 

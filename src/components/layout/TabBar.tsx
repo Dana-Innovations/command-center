@@ -101,9 +101,13 @@ interface TabBarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   className?: string;
+  visibleTabIds?: TabId[];
 }
 
-export function TabBar({ activeTab, onTabChange, className }: TabBarProps) {
+export function TabBar({ activeTab, onTabChange, className, visibleTabIds }: TabBarProps) {
+  const filteredTabs = visibleTabIds
+    ? tabs.filter((tab) => visibleTabIds.includes(tab.id))
+    : tabs;
   return (
     <>
       {/* ─── Mobile: Sticky top header with logo ─── */}
@@ -122,7 +126,7 @@ export function TabBar({ activeTab, onTabChange, className }: TabBarProps) {
         role="tablist"
       >
         <div className="flex items-center justify-around h-16 overflow-x-auto">
-          {tabs.map((tab) => {
+          {filteredTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -163,7 +167,7 @@ export function TabBar({ activeTab, onTabChange, className }: TabBarProps) {
           className="tab-bar flex items-center gap-1 rounded-xl bg-[var(--tab-bg)] p-1"
           role="tablist"
         >
-          {tabs.map((tab) => {
+          {filteredTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button

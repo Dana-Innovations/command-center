@@ -79,15 +79,22 @@ function TeamsChatsCard() {
 export function SignalsView() {
   const { isAri } = useAuth();
   const { tasks } = useTasks();
+  const { m365: m365Connected, slack: slackConnected } = useConnections();
   const jeanaItems = transformJeanaItems(tasks);
+
+  const showTeams = m365Connected;
+  const showSlack = slackConnected;
+  const chatCardCount = (showTeams ? 1 : 0) + (showSlack ? 1 : 0);
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <TeamsChatsCard />
-        <SlackCard />
-      </div>
-      <EmailHygieneCard />
+      {chatCardCount > 0 && (
+        <div className={chatCardCount === 2 ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : ""}>
+          {showTeams && <TeamsChatsCard />}
+          {showSlack && <SlackCard />}
+        </div>
+      )}
+      {m365Connected && <EmailHygieneCard />}
       <AIFeedCard />
       {isAri && <JeanaSection items={jeanaItems} />}
     </div>

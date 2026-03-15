@@ -10,8 +10,19 @@ import { useSalesforce } from "@/hooks/useSalesforce";
 import { useMonday } from "@/hooks/useMonday";
 import { useAsanaComments } from "@/hooks/useAsanaComments";
 import { useLiveData } from "@/lib/live-data-context";
+import { useConnections } from "@/hooks/useConnections";
+import { ConnectedServicesPanel } from "@/components/ui/ConnectedServicesPanel";
 import { toPacificDate } from "@/lib/calendar";
 import type { Task, CalendarEvent } from "@/lib/types";
+
+const SERVICE_LABELS: Record<string, string> = {
+  m365: "Microsoft 365",
+  asana: "Asana",
+  slack: "Slack",
+  salesforce: "Salesforce",
+  powerbi: "Power BI",
+  monday: "Monday.com",
+};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -218,6 +229,7 @@ export function DigestView() {
   const { orders, loading: mondayLoading } = useMonday();
   const { comments: asanaComments, loading: commentsLoading } = useAsanaComments();
   const { asanaProjects, refetch } = useLiveData();
+  const connections = useConnections();
 
   // ─── Board filter state ───────────────────────────────────────────────────
   const [showBoardSettings, setShowBoardSettings] = useState(false);
@@ -724,6 +736,15 @@ export function DigestView() {
 
   // Gorilla expand state
   const [expandedGorilla, setExpandedGorilla] = useState<string | null>(null);
+
+  // Unlock more services
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const disconnectedServices = useMemo(
+    () => Object.entries(connections)
+      .filter(([, connected]) => !connected)
+      .map(([key]) => key),
+    [connections]
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // ─── Urgency helpers ─────────────────────────────────────────────────────
@@ -789,11 +810,11 @@ export function DigestView() {
           {/* Quick stats */}
           <div className="flex items-center gap-4">
             {[
-              { label: "Meetings", value: stats.meetingsToday, color: "text-accent-teal" },
-              { label: "Monkeys", value: stats.openMonkeys, color: "text-accent-amber" },
+              connections.m365 && { label: "Meetings", value: stats.meetingsToday, color: "text-accent-teal" },
+              connections.asana && { label: "Monkeys", value: stats.openMonkeys, color: "text-accent-amber" },
               { label: "At Risk", value: stats.gorillasAtRisk, color: stats.gorillasAtRisk > 0 ? "text-accent-red" : "text-text-muted" },
-              { label: "Reply", value: stats.emailsNeedReply, color: stats.emailsNeedReply > 0 ? "text-accent-red" : "text-text-muted" },
-            ].map((s) => (
+              connections.m365 && { label: "Reply", value: stats.emailsNeedReply, color: stats.emailsNeedReply > 0 ? "text-accent-red" : "text-text-muted" },
+            ].filter((s): s is { label: string; value: number; color: string } => Boolean(s)).map((s) => (
               <div key={s.label} className="text-center min-w-[48px]">
                 <p className={cn("text-lg font-bold tabular-nums", s.color)}>
                   {loading ? "—" : s.value}
@@ -812,7 +833,7 @@ export function DigestView() {
         {/* ── LEFT COLUMN ────────────────────────────────────────────────────── */}
         <div className="space-y-5">
           {/* Today's Schedule / Upcoming Schedule */}
-          <div
+          {connections.m365 && <div
             className="glass-card anim-card p-5"
             style={{ animationDelay: "80ms" }}
           >
@@ -966,10 +987,10 @@ export function DigestView() {
             ) : (
               <SectionEmpty message="No meetings this week" />
             )}
-          </div>
+          </div>}
 
           {/* My Monkeys */}
-          <div
+          {connections.asana && <div
             className="glass-card anim-card p-5"
             style={{ animationDelay: "160ms" }}
           >
@@ -1105,10 +1126,10 @@ export function DigestView() {
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Email Inbox Snapshot */}
-          <div
+          {connections.m365 && <div
             className="glass-card anim-card p-5"
             style={{ animationDelay: "240ms" }}
           >
@@ -1149,10 +1170,10 @@ export function DigestView() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Tomorrow Preview — hidden when upcoming schedule already shows it */}
-          {!showUpcoming && tomorrowFirstMeeting && (
+          {connections.m365 && !showUpcoming && tomorrowFirstMeeting && (
             <div
               className="glass-card anim-card p-5"
               style={{ animationDelay: "320ms" }}
@@ -1249,7 +1270,7 @@ export function DigestView() {
           </div>
 
           {/* Delegated — Going Cold */}
-          <div
+          {connections.asana && <div
             className="glass-card anim-card p-5"
             style={{ animationDelay: "160ms" }}
           >
@@ -1318,7 +1339,7 @@ export function DigestView() {
                 })}
               </div>
             )}
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -1418,6 +1439,40 @@ export function DigestView() {
           </div>
         )}
       </div>
+
+      {/* ── Unlock More Services ──────────────────────────────────────────────── */}
+      {disconnectedServices.length > 0 && (
+        <div className="glass-card anim-card p-4" style={{ animationDelay: "320ms" }}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text-heading">Unlock more insights</p>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {disconnectedServices.map((svc) => (
+                    <span key={svc} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-text-muted">
+                      {SERVICE_LABELS[svc] ?? svc}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setServicesOpen(true)}
+              className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-text-primary transition-colors cursor-pointer"
+            >
+              Manage
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ConnectedServicesPanel open={servicesOpen} onClose={() => setServicesOpen(false)} />
     </div>
   );
 }
