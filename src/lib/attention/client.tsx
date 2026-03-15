@@ -13,10 +13,13 @@ import {
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type {
+  AttentionProvider,
   AttentionFeedbackValue,
   AttentionItem,
   AttentionProfile,
   AttentionTarget,
+  FocusMapResponse,
+  FocusMapWarning,
   FocusNode,
   ImportanceTier,
 } from "@/lib/attention/types";
@@ -36,15 +39,24 @@ interface ServiceStatus {
   account_email?: string;
 }
 
-interface FocusMapResponse {
-  providers?: FocusNode[];
-  fetchedAt?: string;
+interface FocusMapErrorState {
+  message: string;
+  provider?: AttentionProvider;
+}
+
+interface FocusMapRefreshResult {
+  ok: boolean;
+  warnings: FocusMapWarning[];
+  error: string | null;
 }
 
 interface AttentionContextValue {
   profile: AttentionProfile | null;
   focusProviders: FocusNode[];
   services: ServiceStatus[];
+  focusMapWarnings: FocusMapWarning[];
+  focusMapError: FocusMapErrorState | null;
+  profileError: string | null;
   profileLoading: boolean;
   focusMapLoading: boolean;
   servicesLoading: boolean;
@@ -55,9 +67,12 @@ interface AttentionContextValue {
   openSetupFocus: (tab?: SetupFocusTab) => void;
   setSetupTab: (tab: SetupFocusTab) => void;
   refreshProfile: () => Promise<void>;
-  refreshFocusMap: (options?: { provider?: string; teamId?: string }) => Promise<void>;
+  refreshFocusMap: (options?: {
+    provider?: AttentionProvider;
+    teamId?: string;
+  }) => Promise<FocusMapRefreshResult>;
   refreshServices: () => Promise<void>;
-  ensureTeamChannels: (teamId: string) => Promise<void>;
+  ensureTeamChannels: (teamId: string) => Promise<FocusMapRefreshResult>;
   setNodeImportance: (node: FocusNode, importance: ImportanceTier) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   updateReplyPreferences: (preferences: ReplyPriorityPreferences) => Promise<void>;
@@ -102,6 +117,32 @@ function mergeProviderNodes(current: FocusNode[], next: FocusNode[]) {
   return Array.from(merged.values());
 }
 
+function warningKey(warning: FocusMapWarning) {
+  return [
+    warning.provider ?? "global",
+    warning.scope ?? "all",
+    warning.code,
+    warning.message,
+  ].join("::");
+}
+
+function mergeFocusWarnings(
+  current: FocusMapWarning[],
+  next: FocusMapWarning[],
+  provider?: AttentionProvider
+) {
+  if (!provider) {
+    return next;
+  }
+
+  const retained = current.filter((warning) => warning.provider !== provider);
+  const merged = new Map(
+    [...retained, ...next].map((warning) => [warningKey(warning), warning])
+  );
+
+  return Array.from(merged.values());
+}
+
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
@@ -117,6 +158,11 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AttentionProfile | null>(null);
   const [focusProviders, setFocusProviders] = useState<FocusNode[]>([]);
   const [services, setServices] = useState<ServiceStatus[]>([]);
+  const [focusMapWarnings, setFocusMapWarnings] = useState<FocusMapWarning[]>([]);
+  const [focusMapError, setFocusMapError] = useState<FocusMapErrorState | null>(
+    null
+  );
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [focusMapLoading, setFocusMapLoading] = useState(true);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -130,14 +176,26 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       const next = await fetchJson<AttentionProfile>("/api/preferences", {
         cache: "no-store",
       });
-      startTransition(() => setProfile(next));
+      startTransition(() => {
+        setProfile(next);
+        setProfileError(null);
+      });
+    } catch (error) {
+      startTransition(() => {
+        setProfileError(
+          error instanceof Error ? error.message : "Failed to load preferences"
+        );
+      });
     } finally {
       setProfileLoading(false);
     }
   }, []);
 
   const refreshFocusMap = useCallback(
-    async (options?: { provider?: string; teamId?: string }) => {
+    async (options?: {
+      provider?: AttentionProvider;
+      teamId?: string;
+    }): Promise<FocusMapRefreshResult> => {
       const params = new URLSearchParams();
       if (options?.provider) params.set("provider", options.provider);
       if (options?.teamId) params.set("teamId", options.teamId);
@@ -149,12 +207,52 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
           `/api/focus/map${query ? `?${query}` : ""}`,
           { cache: "no-store" }
         );
+        const warnings = next.warnings ?? [];
 
         startTransition(() => {
           setFocusProviders((current) =>
-            mergeProviderNodes(current, next.providers ?? [])
+            mergeProviderNodes(current, next.providers)
           );
+          setFocusMapWarnings((current) =>
+            mergeFocusWarnings(current, warnings, options?.provider)
+          );
+          setFocusMapError((current) => {
+            if (next.error) {
+              return {
+                message: next.error,
+                provider: options?.provider,
+              };
+            }
+
+            if (!options?.provider) {
+              return null;
+            }
+
+            return current?.provider === options.provider ? null : current;
+          });
         });
+
+        return {
+          ok: !next.error,
+          warnings,
+          error: next.error ?? null,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load focus map";
+
+        startTransition(() => {
+          setFocusMapError({
+            message,
+            provider: options?.provider,
+          });
+        });
+
+        return {
+          ok: false,
+          warnings: [],
+          error: message,
+        };
       } finally {
         setFocusMapLoading(false);
       }
@@ -175,7 +273,9 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void Promise.all([refreshProfile(), refreshFocusMap(), refreshServices()]);
+    void refreshProfile();
+    void refreshFocusMap();
+    void refreshServices();
   }, [refreshFocusMap, refreshProfile, refreshServices]);
 
   const nodeIndex = useMemo(() => flattenFocusNodes(focusProviders), [focusProviders]);
@@ -200,14 +300,26 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       focusUpserts?: Array<Record<string, unknown>>;
       focusDeletes?: Array<Record<string, unknown>>;
     }) => {
-      const next = await fetchJson<AttentionProfile>("/api/preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      try {
+        const next = await fetchJson<AttentionProfile>("/api/preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
 
-      startTransition(() => setProfile(next));
-      return next;
+        startTransition(() => {
+          setProfile(next);
+          setProfileError(null);
+        });
+        return next;
+      } catch (error) {
+        startTransition(() => {
+          setProfileError(
+            error instanceof Error ? error.message : "Failed to save preferences"
+          );
+        });
+        throw error;
+      }
     },
     []
   );
@@ -281,10 +393,14 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void savePreferences(tasksToMigrate).then(() => {
-      setFocusRevision((value) => value + 1);
-      void refreshFocusMap();
-    });
+    void savePreferences(tasksToMigrate)
+      .then(() => {
+        setFocusRevision((value) => value + 1);
+        void refreshFocusMap();
+      })
+      .catch(() => {
+        // Loading errors are surfaced via profileError state.
+      });
   }, [profile, refreshFocusMap, savePreferences, user]);
 
   const openSetupFocus = useCallback((tab: SetupFocusTab = "focus") => {
@@ -293,13 +409,15 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
 
   const ensureTeamChannels = useCallback(
     async (teamId: string) => {
-      if (!teamId) return;
+      if (!teamId) {
+        return { ok: true, warnings: [], error: null };
+      }
       const teamNode = nodeIndex.get(`teams::teams_team::${teamId}`);
       if (teamNode && teamNode.children && teamNode.children.length > 0) {
-        return;
+        return { ok: true, warnings: [], error: null };
       }
 
-      await refreshFocusMap({ provider: "teams", teamId });
+      return refreshFocusMap({ provider: "teams", teamId });
     },
     [nodeIndex, refreshFocusMap]
   );
@@ -414,6 +532,9 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       profile,
       focusProviders,
       services,
+      focusMapWarnings,
+      focusMapError,
+      profileError,
       profileLoading,
       focusMapLoading,
       servicesLoading,
@@ -438,13 +559,16 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       applyTarget,
       completeOnboarding,
       ensureTeamChannels,
+      focusMapError,
       focusMapLoading,
       focusProviders,
+      focusMapWarnings,
       focusRevision,
       getItemFeedback,
       onboardingCompleted,
       openSetupFocus,
       profile,
+      profileError,
       profileLoading,
       refreshFocusMap,
       refreshProfile,

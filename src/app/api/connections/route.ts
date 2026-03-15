@@ -3,6 +3,7 @@ import { getCortexToken } from "@/lib/cortex/client";
 import {
   getConnections,
   initiateConnect,
+  matchesConnectionName,
   REQUIRED_SERVICES,
 } from "@/lib/cortex/connections";
 
@@ -21,10 +22,8 @@ export async function GET(request: NextRequest) {
   const services = REQUIRED_SERVICES.map((svc) => {
     const conn = connections.find(
       (c) =>
-        c.mcp_name === svc.mcp_name ||
-        c.provider === svc.provider ||
-        c.mcp_name === svc.provider ||
-        c.provider === svc.mcp_name
+        matchesConnectionName(c, svc.mcp_name) ||
+        matchesConnectionName(c, svc.provider)
     );
     return {
       ...svc,

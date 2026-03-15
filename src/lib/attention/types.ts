@@ -166,10 +166,28 @@ export interface FocusNode {
   children?: FocusNode[];
 }
 
+export interface FocusMapWarning {
+  provider?: AttentionProvider;
+  code:
+    | "profile_unavailable"
+    | "session_unavailable"
+    | "inventory_failed"
+    | "team_channels_failed";
+  message: string;
+  detail?: string;
+  scope?: string;
+}
+
+export interface FocusMapResponse {
+  providers: FocusNode[];
+  warnings?: FocusMapWarning[];
+  error?: string | null;
+  fetchedAt: string;
+}
+
 export interface AttentionProfile {
   settings: UserSettingsRecord;
   focusPreferences: FocusPreferenceRecord[];
   feedback: ItemFeedbackRecord[];
   biases: PriorityBiasRecord[];
 }
-

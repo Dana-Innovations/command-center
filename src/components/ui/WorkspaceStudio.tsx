@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useAttention } from "@/lib/attention/client";
 import type {
+  AttentionProvider,
   AttentionFeedbackValue,
   FocusNode,
   ImportanceTier,
@@ -31,6 +33,14 @@ const FEEDBACK_LABELS: Record<AttentionFeedbackValue, string> = {
   raise: "Raised before",
   right: "Held at the right level",
   lower: "Lowered before",
+};
+
+const PROVIDER_CONNECTION_LABELS: Record<AttentionProvider, string> = {
+  outlook_mail: "Microsoft 365",
+  outlook_calendar: "Microsoft 365",
+  asana: "Asana",
+  teams: "Microsoft 365",
+  slack: "Slack",
 };
 
 function filterNodes(nodes: FocusNode[], query: string): FocusNode[] {
@@ -86,6 +96,40 @@ function FocusTierControl({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function FocusStatusCard({
+  title,
+  body,
+  tone = "default",
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  body: string;
+  tone?: "default" | "warning" | "error";
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const toneClasses = {
+    default: "border-[var(--bg-card-border)] bg-white/[0.03] text-text-muted",
+    warning: "border-accent-amber/30 bg-accent-amber/10 text-text-body",
+    error: "border-accent-red/30 bg-accent-red/10 text-text-body",
+  } satisfies Record<string, string>;
+
+  return (
+    <div className={cn("rounded-2xl border p-5", toneClasses[tone])}>
+      <div className="text-sm font-medium text-text-heading">{title}</div>
+      <div className="mt-2 text-sm leading-relaxed">{body}</div>
+      {actionLabel && onAction && (
+        <div className="mt-4">
+          <Button variant="secondary" size="sm" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -173,20 +217,30 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
     profile,
     focusProviders,
     services,
+    focusMapWarnings,
+    focusMapError,
+    profileError,
     profileLoading,
     focusMapLoading,
     servicesLoading,
     setupTab,
     setSetupTab,
+    refreshFocusMap,
     refreshServices,
     ensureTeamChannels,
     setNodeImportance,
+    refreshProfile,
     completeOnboarding,
   } = useAttention();
+  const { addToast } = useToast();
   const [search, setSearch] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [selectedProvider, setSelectedProvider] = useState<
+    AttentionProvider | ""
+  >("");
   const [pendingNodeId, setPendingNodeId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [focusActionError, setFocusActionError] = useState<string | null>(null);
+  const [teamRetryNodeId, setTeamRetryNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedProvider && focusProviders.length > 0) {
@@ -206,6 +260,48 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
     () => filterNodes(providerNode?.children ?? [], search),
     [providerNode, search]
   );
+
+  const selectedWarnings = useMemo(
+    () =>
+      focusMapWarnings.filter(
+        (warning) =>
+          (!warning.provider || warning.provider === providerNode?.provider) &&
+          !(
+            focusActionError &&
+            warning.code === "team_channels_failed" &&
+            warning.scope === teamRetryNodeId
+          )
+      ),
+    [focusActionError, focusMapWarnings, providerNode, teamRetryNodeId]
+  );
+
+  const selectedFocusError = useMemo(() => {
+    if (!focusMapError) return null;
+    if (!focusMapError.provider) return focusMapError;
+    return focusMapError.provider === providerNode?.provider
+      ? focusMapError
+      : null;
+  }, [focusMapError, providerNode]);
+
+  const hasProviderInventory = (providerNode?.children?.length ?? 0) > 0;
+  const isSearching = search.trim().length > 0;
+  const showInitialFocusLoading = focusMapLoading && focusProviders.length === 0;
+
+  useEffect(() => {
+    if (!teamRetryNodeId || providerNode?.provider !== "teams") return;
+
+    const teamNode = providerNode.children?.find(
+      (child) => child.entityId === teamRetryNodeId
+    );
+    if (teamNode?.children && teamNode.children.length > 0) {
+      setFocusActionError(null);
+      setTeamRetryNodeId(null);
+    }
+  }, [providerNode, teamRetryNodeId]);
+
+  useEffect(() => {
+    setFocusActionError(null);
+  }, [selectedProvider]);
 
   const preview = useMemo(() => {
     const records = profile?.focusPreferences ?? [];
@@ -238,21 +334,34 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider }),
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          setConnecting(null);
+          addToast("Failed to start the connection flow.", "error");
+          return;
+        }
         const data = (await response.json()) as { authorization_url?: string };
-        if (!data.authorization_url) return;
+        if (!data.authorization_url) {
+          setConnecting(null);
+          addToast("No authorization URL was returned for this connection.", "error");
+          return;
+        }
 
         const popup = window.open(
           data.authorization_url,
           "cortex-connect",
           "width=640,height=760,popup=yes"
         );
+        if (!popup) {
+          setConnecting(null);
+          addToast("The browser blocked the connection popup.", "error");
+          return;
+        }
 
         const interval = window.setInterval(async () => {
           if (popup?.closed) {
             window.clearInterval(interval);
             setConnecting(null);
-            await refreshServices();
+            await Promise.all([refreshServices(), refreshFocusMap()]);
           }
         }, 1200);
 
@@ -260,17 +369,42 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
           window.clearInterval(interval);
           setConnecting(null);
         }, 300000);
-      } catch {
+      } catch (error) {
+        addToast(
+          error instanceof Error
+            ? error.message
+            : "Failed to start the connection flow.",
+          "error"
+        );
         setConnecting(null);
       }
     },
-    [refreshServices]
+    [addToast, refreshFocusMap, refreshServices]
   );
 
   const handleSelectNode = useCallback(
     async (node: FocusNode) => {
       if (node.provider === "teams" && node.entityType === "teams_team" && node.lazy) {
-        await ensureTeamChannels(node.entityId);
+        setTeamRetryNodeId(node.entityId);
+        const result = await ensureTeamChannels(node.entityId);
+        const teamWarning = result.warnings.find(
+          (warning) =>
+            warning.provider === "teams" &&
+            warning.code === "team_channels_failed" &&
+            warning.scope === node.entityId
+        );
+
+        if (!result.ok || teamWarning) {
+          setFocusActionError(
+            teamWarning?.message ||
+              result.error ||
+              `Couldn't load channels for ${node.label}.`
+          );
+          return;
+        }
+
+        setFocusActionError(null);
+        setTeamRetryNodeId(null);
       }
     },
     [ensureTeamChannels]
@@ -281,12 +415,47 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
       setPendingNodeId(node.id);
       try {
         await setNodeImportance(node, importance);
+        setFocusActionError(null);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to save the focus preference.";
+        setFocusActionError(message);
+        addToast(message, "error");
       } finally {
         setPendingNodeId(null);
       }
     },
-    [setNodeImportance]
+    [addToast, setNodeImportance]
   );
+
+  const retrySelectedProvider = useCallback(() => {
+    setFocusActionError(null);
+
+    if (!providerNode?.provider) {
+      void refreshFocusMap();
+      return;
+    }
+
+    void refreshFocusMap({ provider: providerNode.provider });
+  }, [providerNode, refreshFocusMap]);
+
+  const retryTeamChannels = useCallback(() => {
+    if (!teamRetryNodeId) return;
+
+    const teamNode = providerNode?.children?.find(
+      (child) => child.entityId === teamRetryNodeId
+    );
+    setFocusActionError(null);
+
+    if (teamNode) {
+      void handleSelectNode(teamNode);
+      return;
+    }
+
+    void refreshFocusMap({ provider: "teams", teamId: teamRetryNodeId });
+  }, [handleSelectNode, providerNode, refreshFocusMap, teamRetryNodeId]);
 
   const connectedCount = services.filter((service) => service.connected).length;
 
@@ -376,6 +545,18 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
             </button>
           ))}
         </div>
+
+        {profileError && (
+          <div className="px-5 pt-5">
+            <FocusStatusCard
+              title="Focus preferences are unavailable"
+              body={`${profileError} You can still browse connected providers, but saved focus rules and previews may be incomplete until preferences load again.`}
+              tone="warning"
+              actionLabel="Retry preferences"
+              onAction={() => void refreshProfile()}
+            />
+          </div>
+        )}
 
         {setupTab === "connections" && (
           <div className="grid gap-5 pt-5 lg:grid-cols-[1.1fr_0.9fr]">
@@ -472,38 +653,51 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                 </p>
               </div>
               <div className="space-y-2">
-                {focusProviders.map((provider) => {
-                  const explicitCount = (profile?.focusPreferences ?? []).filter(
-                    (entry) => entry.provider === provider.provider
-                  ).length;
-                  return (
-                    <button
-                      key={provider.provider}
-                      type="button"
-                      onClick={() => setSelectedProvider(provider.provider)}
-                      className={cn(
-                        "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
-                        provider.provider === providerNode?.provider
-                          ? "border-accent-amber/40 bg-[var(--tab-active-bg)]"
-                          : "border-[var(--bg-card-border)] bg-white/[0.03] hover:bg-white/[0.06]"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium text-text-heading">
-                          {provider.label}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                          {provider.importance}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-text-muted">
-                        {explicitCount > 0
-                          ? `${explicitCount} saved focus rules`
-                          : provider.description}
-                      </div>
-                    </button>
-                  );
-                })}
+                {focusProviders.length > 0 ? (
+                  focusProviders.map((provider) => {
+                    const explicitCount = (profile?.focusPreferences ?? []).filter(
+                      (entry) => entry.provider === provider.provider
+                    ).length;
+                    return (
+                      <button
+                        key={provider.provider}
+                        type="button"
+                        onClick={() => setSelectedProvider(provider.provider)}
+                        className={cn(
+                          "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                          provider.provider === providerNode?.provider
+                            ? "border-accent-amber/40 bg-[var(--tab-active-bg)]"
+                            : "border-[var(--bg-card-border)] bg-white/[0.03] hover:bg-white/[0.06]"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-text-heading">
+                            {provider.label}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                            {provider.importance}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs text-text-muted">
+                          {explicitCount > 0
+                            ? `${explicitCount} saved focus rules`
+                            : provider.description}
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <FocusStatusCard
+                    title="No supported providers yet"
+                    body={
+                      selectedFocusError?.message ||
+                      "The focus map did not return any supported providers."
+                    }
+                    tone={selectedFocusError ? "error" : "default"}
+                    actionLabel="Retry focus map"
+                    onAction={retrySelectedProvider}
+                  />
+                )}
               </div>
             </section>
 
@@ -511,9 +705,16 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
               <div className="border-b border-[var(--bg-card-border)] px-5 py-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-text-heading">
-                      {providerNode?.label ?? "Focus"}
-                    </h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold text-text-heading">
+                        {providerNode?.label ?? "Focus"}
+                      </h2>
+                      {focusMapLoading && focusProviders.length > 0 && (
+                        <span className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                          Refreshing
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm text-text-muted">
                       Set the attention tier for the resources that matter most.
                     </p>
@@ -529,24 +730,85 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-                {focusMapLoading || profileLoading ? (
-                  <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] p-5 text-sm text-text-muted">
-                    Loading focus map...
-                  </div>
-                ) : filteredNodes.length === 0 ? (
-                  <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] p-5 text-sm text-text-muted">
-                    No matching resources yet.
-                  </div>
-                ) : (
-                  <FocusTree
-                    nodes={filteredNodes}
-                    pendingNodeId={pendingNodeId}
-                    onSelectNode={(node) => void handleSelectNode(node)}
-                    onChangeImportance={(node, next) =>
-                      void handleChangeImportance(node, next)
-                    }
-                  />
-                )}
+                <div className="space-y-4">
+                  {focusActionError && (
+                    <FocusStatusCard
+                      title="Channels could not be loaded"
+                      body={focusActionError}
+                      tone="error"
+                      actionLabel={teamRetryNodeId ? "Retry loading channels" : "Retry"}
+                      onAction={
+                        teamRetryNodeId ? retryTeamChannels : retrySelectedProvider
+                      }
+                    />
+                  )}
+
+                  {selectedFocusError && !focusActionError && (
+                    <FocusStatusCard
+                      title="Focus map could not be refreshed"
+                      body={`${selectedFocusError.message} The last successful provider map will stay visible until the next refresh works.`}
+                      tone="error"
+                      actionLabel="Retry provider"
+                      onAction={retrySelectedProvider}
+                    />
+                  )}
+
+                  {selectedWarnings.map((warning) => (
+                    <FocusStatusCard
+                      key={`${warning.provider ?? "global"}-${warning.code}-${warning.scope ?? "all"}`}
+                      title={
+                        warning.provider
+                          ? `${providerNode?.label ?? "Focus"} warning`
+                          : "Focus setup warning"
+                      }
+                      body={warning.message}
+                      tone="warning"
+                      actionLabel="Retry provider"
+                      onAction={retrySelectedProvider}
+                    />
+                  ))}
+
+                  {showInitialFocusLoading ? (
+                    <FocusStatusCard
+                      title="Loading focus map"
+                      body="Discovering your supported providers and their available resources."
+                    />
+                  ) : !providerNode ? (
+                    <FocusStatusCard
+                      title="No provider selected"
+                      body="Choose a supported provider from the left to start shaping what rises and fades."
+                    />
+                  ) : !providerNode.connected ? (
+                    <FocusStatusCard
+                      title={`${providerNode.label} is not connected`}
+                      body={`Connect ${PROVIDER_CONNECTION_LABELS[providerNode.provider]} in the Connections tab to load its folders, boards, teams, or channels here.`}
+                      actionLabel="Open Connections"
+                      onAction={() => setSetupTab("connections")}
+                    />
+                  ) : isSearching && filteredNodes.length === 0 ? (
+                    <FocusStatusCard
+                      title="No matching resources"
+                      body={`No ${providerNode.label} resources match "${search.trim()}". Try a broader search.`}
+                    />
+                  ) : !hasProviderInventory ? (
+                    <FocusStatusCard
+                      title={`No ${providerNode.label} resources discovered yet`}
+                      body={`This provider is connected, but no drill-down resources are available yet. Refresh the provider inventory or reconnect it from the Connections tab.`}
+                      tone={selectedWarnings.length > 0 ? "warning" : "default"}
+                      actionLabel="Refresh provider"
+                      onAction={retrySelectedProvider}
+                    />
+                  ) : (
+                    <FocusTree
+                      nodes={filteredNodes}
+                      pendingNodeId={pendingNodeId}
+                      onSelectNode={(node) => void handleSelectNode(node)}
+                      onChangeImportance={(node, next) =>
+                        void handleChangeImportance(node, next)
+                      }
+                    />
+                  )}
+                </div>
               </div>
             </section>
 
@@ -565,7 +827,11 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                     What will rise
                   </div>
                   <div className="mt-3 space-y-2">
-                    {preview.rise.length > 0 ? (
+                    {profileLoading && !profile ? (
+                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                        Loading saved focus rules...
+                      </div>
+                    ) : preview.rise.length > 0 ? (
                       preview.rise.map((record) => (
                         <div
                           key={`${record.provider}-${record.entity_type}-${record.entity_id}`}
@@ -592,7 +858,11 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                     What will fade
                   </div>
                   <div className="mt-3 space-y-2">
-                    {preview.fade.length > 0 ? (
+                    {profileLoading && !profile ? (
+                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                        Loading saved focus rules...
+                      </div>
+                    ) : preview.fade.length > 0 ? (
                       preview.fade.map((record) => (
                         <div
                           key={`${record.provider}-${record.entity_type}-${record.entity_id}`}

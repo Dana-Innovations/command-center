@@ -5,6 +5,16 @@
 const CORTEX_URL =
   process.env.NEXT_PUBLIC_CORTEX_URL || "https://cortex-bice.vercel.app";
 
+const CONNECTED_STATUSES = new Set([
+  "active",
+  "authorized",
+  "complete",
+  "completed",
+  "connected",
+  "ready",
+  "success",
+]);
+
 /** Raw shape returned by Cortex GET /api/v1/oauth/connections */
 interface CortexRawConnection {
   id?: string;
@@ -49,6 +59,55 @@ export const REQUIRED_SERVICES = [
   },
 ] as const;
 
+function normalizeValue(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function canonicalConnectionName(
+  value: unknown,
+  field: "mcp_name" | "provider"
+) {
+  const normalized = normalizeValue(value);
+
+  switch (normalized) {
+    case "m365":
+    case "microsoft":
+    case "microsoft365":
+    case "office365":
+      return field === "mcp_name" ? "m365" : "microsoft";
+    case "monday":
+    case "mondaycom":
+      return "monday";
+    case "powerbi":
+    case "microsoftpowerbi":
+      return "powerbi";
+    default:
+      return normalized;
+  }
+}
+
+function isConnectedStatus(status: unknown) {
+  return CONNECTED_STATUSES.has(normalizeValue(status));
+}
+
+export function matchesConnectionName(
+  connection: Pick<CortexConnection, "mcp_name" | "provider">,
+  name: string
+) {
+  const targetMcp = canonicalConnectionName(name, "mcp_name");
+  const targetProvider = canonicalConnectionName(name, "provider");
+
+  return (
+    connection.mcp_name === targetMcp ||
+    connection.provider === targetProvider ||
+    connection.mcp_name === targetProvider ||
+    connection.provider === targetMcp
+  );
+}
+
 /**
  * Fetch the user's connected MCP services from Cortex.
  * Normalizes the Cortex response into a consistent shape.
@@ -72,10 +131,10 @@ export async function getConnections(
     );
 
     return raw.map((c) => ({
-      mcp_name: c.mcp_name || c.provider || "",
-      provider: c.provider || c.mcp_name || "",
+      mcp_name: canonicalConnectionName(c.mcp_name || c.provider, "mcp_name"),
+      provider: canonicalConnectionName(c.provider || c.mcp_name, "provider"),
       account_email: c.account_email,
-      connected: c.status === "active",
+      connected: isConnectedStatus(c.status),
       is_company_default: c.is_company_default ?? false,
     }));
   } catch (e) {
@@ -93,7 +152,7 @@ export function isUserConnected(
 ): boolean {
   return connections.some(
     (c) =>
-      (c.mcp_name === mcpName || c.provider === mcpName) &&
+      matchesConnectionName(c, mcpName) &&
       c.connected &&
       !c.is_company_default
   );
