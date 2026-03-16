@@ -262,41 +262,22 @@ function extractCommentEntry(
   };
 }
 
-function extractRecentComments(payload: Record<string, unknown>): AsanaCommentEntry[] {
-  const comments = firstArrayProperty(payload, [
-    "comments",
-    "stories",
-    "items",
-    "data",
-    "events",
-    "value",
-  ]);
-
-  return comments
-    .map((comment, index) => extractCommentEntry(comment, `comment-${index}`))
-    .filter((comment): comment is AsanaCommentEntry => comment !== null)
-    .sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
-    .slice(-5);
-}
-
-function extractRecentCommentsFromStories(
-  payload: Record<string, unknown>
+function extractRecentComments(
+  payload: Record<string, unknown>,
+  filter?: (entry: Record<string, unknown>) => boolean
 ): AsanaCommentEntry[] {
-  const stories = firstArrayProperty(payload, [
-    "stories",
+  const items = firstArrayProperty(payload, [
     "comments",
+    "stories",
     "items",
     "data",
     "events",
     "value",
   ]);
 
-  return stories
-    .filter(isHumanCommentStory)
-    .map((story, index) => extractCommentEntry(story, `story-${index}`))
+  const filtered = filter ? items.filter(filter) : items;
+  return filtered
+    .map((item, index) => extractCommentEntry(item, `comment-${index}`))
     .filter((comment): comment is AsanaCommentEntry => comment !== null)
     .sort(
       (a, b) =>
@@ -412,42 +393,33 @@ export async function GET(request: NextRequest) {
         tool.name.includes("task")
     );
 
-    let rawTask: Record<string, unknown> = {};
-    try {
-      rawTask = await cortexCall(
+    const [rawTask, rawComments] = await Promise.all([
+      cortexCall(
         cortexToken,
         sessionId,
         `asana-task-${taskGid}`,
         taskTool.name,
         buildTaskScopedArgs(taskTool, taskGid)
-      );
-    } catch {
-      rawTask = {};
-    }
+      ).catch(() => ({}) as Record<string, unknown>),
+      commentsTool
+        ? cortexCall(
+            cortexToken,
+            sessionId,
+            `asana-comments-${taskGid}`,
+            commentsTool.name,
+            buildTaskScopedArgs(commentsTool, taskGid, 8)
+          ).catch(() => ({}) as Record<string, unknown>)
+        : Promise.resolve(null),
+    ]);
 
     const task = extractTaskRecord(rawTask);
     const project = extractProject(task);
     const assignee = toAsanaPerson(task.assignee);
     const now = new Date().toISOString();
 
-    let recentComments: AsanaCommentEntry[] = [];
-
-    if (commentsTool) {
-      try {
-        const rawComments = await cortexCall(
-          cortexToken,
-          sessionId,
-          `asana-comments-${taskGid}`,
-          commentsTool.name,
-          buildTaskScopedArgs(commentsTool, taskGid, 8)
-        );
-        recentComments = extractRecentComments(
-          rawComments as Record<string, unknown>
-        );
-      } catch {
-        recentComments = [];
-      }
-    }
+    let recentComments: AsanaCommentEntry[] = rawComments
+      ? extractRecentComments(rawComments as Record<string, unknown>)
+      : [];
 
     if (recentComments.length === 0 && storyTool) {
       try {
@@ -458,8 +430,9 @@ export async function GET(request: NextRequest) {
           storyTool.name,
           buildTaskScopedArgs(storyTool, taskGid, 12)
         );
-        recentComments = extractRecentCommentsFromStories(
-          rawStories as Record<string, unknown>
+        recentComments = extractRecentComments(
+          rawStories as Record<string, unknown>,
+          isHumanCommentStory
         );
       } catch {
         recentComments = [];

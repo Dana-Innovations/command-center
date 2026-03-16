@@ -27,15 +27,12 @@ function normalizeAsanaText(value: unknown): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const cortexToken = getCortexToken(request);
-    if (!cortexToken) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
     const user = await getCortexUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+
+    const cortexToken = getCortexToken(request)!;
 
     const body = (await request.json()) as {
       taskGid?: string;

@@ -200,8 +200,9 @@ export function buildBriefSnapshot(
 ): BriefSnapshot {
   // --- Score and rank communications ---
   const scoredComms: Array<{ item: BriefSnapshotItem; score: number }> = [];
+  const emailsNeedingReply = data.emails.filter((e) => e.needs_reply);
 
-  for (const email of data.emails.filter((e) => e.needs_reply).slice(0, 20)) {
+  for (const email of emailsNeedingReply.slice(0, 20)) {
     const target = buildEmailAttentionTarget(email, "morning_brief", 70);
     const attention = applyTarget(target);
     if (attention.hidden) continue;
@@ -326,8 +327,9 @@ export function buildBriefSnapshot(
   const scoredTasks = data.tasks
     .filter((t) => !t.completed)
     .map((task) => {
+      const daysLeft = daysUntilDate(task.due_on);
       const baseScore =
-        task.days_overdue > 0 ? 72 : daysUntilDate(task.due_on) !== null && daysUntilDate(task.due_on)! <= 2 ? 62 : 50;
+        task.days_overdue > 0 ? 72 : daysLeft !== null && daysLeft <= 2 ? 62 : 50;
       const target = buildTaskAttentionTarget(task, "morning_brief", baseScore);
       const attention = applyTarget(target);
       return { task, attention, target };
@@ -387,7 +389,7 @@ export function buildBriefSnapshot(
 
   // --- Key counts ---
   const counts = {
-    emailsNeedingReply: data.emails.filter((e) => e.needs_reply).length,
+    emailsNeedingReply: emailsNeedingReply.length,
     overdueTasks: data.tasks.filter((t) => !t.completed && t.days_overdue > 0).length,
     meetingsToday: todayEvents.length,
     dealsClosingThisWeek: data.openOpps.filter((o) => isThisWeek(o.close_date)).length,

@@ -24,7 +24,7 @@ import type {
   FocusNode,
   ImportanceTier,
 } from "@/lib/attention/types";
-import { applyAttentionProfile } from "@/lib/attention/utils";
+import { createAttentionScorer } from "@/lib/attention/utils";
 import type { SetupFocusTab } from "@/lib/tab-config";
 import {
   buildAttentionPeopleDashboardValue,
@@ -600,15 +600,19 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const applyTarget = useCallback(
-    (target: AttentionTarget) =>
-      applyAttentionProfile(
-        target,
+  const scorer = useMemo(
+    () =>
+      createAttentionScorer(
         profile?.focusPreferences ?? [],
         profile?.biases ?? [],
         profile?.settings
       ),
     [profile]
+  );
+
+  const applyTarget = useCallback(
+    (target: AttentionTarget) => scorer(target),
+    [scorer]
   );
 
   const value = useMemo<AttentionContextValue>(

@@ -9,8 +9,10 @@ import type {
   UserSettingsRecord,
 } from "@/lib/attention/types";
 import {
+  type AttentionPersonPreference,
+  getAttentionPersonPreferences,
   getAttentionPersonScoreBoost,
-  resolveAttentionPersonPreferenceForTarget,
+  matchAttentionPersonPreference,
 } from "@/lib/attention/people";
 
 const TOPIC_STOP_WORDS = new Set([
@@ -270,11 +272,10 @@ export function feedbackScore(value: AttentionFeedbackValue) {
   return FEEDBACK_SCORES[value];
 }
 
-export function resolveExplicitImportance(
+function resolveExplicitImportanceFromLookup(
   target: AttentionTarget,
-  records: FocusPreferenceRecord[]
-) {
-  const lookup = buildFocusLookup(records);
+  lookup: Map<string, FocusPreferenceRecord>
+): ImportanceTier {
   const orderedKeys = [
     ...sanitizeKeys(target.resourceKeys),
     buildProviderFocusKey(target.provider),
@@ -300,14 +301,13 @@ export function resolveExplicitImportance(
     }
   }
 
-  return "normal" as ImportanceTier;
+  return "normal";
 }
 
-export function computeLearnedBias(
+function computeLearnedBiasFromLookup(
   target: AttentionTarget,
-  records: PriorityBiasRecord[]
+  lookup: Map<string, PriorityBiasRecord>
 ) {
-  const lookup = buildBiasLookup(records);
   let total = 0;
 
   for (const key of sanitizeKeys(target.resourceKeys)) {
@@ -333,18 +333,32 @@ export function computeLearnedBias(
   return clampFinalBias(Math.round(total * 10) / 10);
 }
 
-export function applyAttentionProfile(
+export function resolveExplicitImportance(
   target: AttentionTarget,
-  focusPreferences: FocusPreferenceRecord[],
-  biases: PriorityBiasRecord[],
-  settings?: UserSettingsRecord | null
+  records: FocusPreferenceRecord[]
+) {
+  return resolveExplicitImportanceFromLookup(target, buildFocusLookup(records));
+}
+
+export function computeLearnedBias(
+  target: AttentionTarget,
+  records: PriorityBiasRecord[]
+) {
+  return computeLearnedBiasFromLookup(target, buildBiasLookup(records));
+}
+
+function scoreTarget(
+  target: AttentionTarget,
+  focusLookup: Map<string, FocusPreferenceRecord>,
+  biasLookup: Map<string, PriorityBiasRecord>,
+  peoplePrefs: AttentionPersonPreference[]
 ): AttentionItem {
-  const explicitImportance = resolveExplicitImportance(target, focusPreferences);
-  const learnedBias = computeLearnedBias(target, biases);
-  const personPreference = resolveAttentionPersonPreferenceForTarget(
-    settings,
-    target
-  );
+  const explicitImportance = resolveExplicitImportanceFromLookup(target, focusLookup);
+  const learnedBias = computeLearnedBiasFromLookup(target, biasLookup);
+  const personPreference =
+    peoplePrefs.length > 0
+      ? matchAttentionPersonPreference(peoplePrefs, { actorKeys: target.actorKeys })
+      : null;
   const personBoost = getAttentionPersonScoreBoost(personPreference);
   const importanceBoost = IMPORTANCE_BOOSTS[explicitImportance];
   const hidden = explicitImportance === "muted";
@@ -390,6 +404,35 @@ export function applyAttentionProfile(
     explanation,
     hidden,
   };
+}
+
+export function applyAttentionProfile(
+  target: AttentionTarget,
+  focusPreferences: FocusPreferenceRecord[],
+  biases: PriorityBiasRecord[],
+  settings?: UserSettingsRecord | null
+): AttentionItem {
+  return scoreTarget(
+    target,
+    buildFocusLookup(focusPreferences),
+    buildBiasLookup(biases),
+    getAttentionPersonPreferences(settings)
+  );
+}
+
+/**
+ * Pre-builds lookup maps once, returns a scorer function.
+ * Use this when scoring many items in a loop to avoid rebuilding maps per item.
+ */
+export function createAttentionScorer(
+  focusPreferences: FocusPreferenceRecord[],
+  biases: PriorityBiasRecord[],
+  settings?: UserSettingsRecord | null
+): (target: AttentionTarget) => AttentionItem {
+  const focusLookup = buildFocusLookup(focusPreferences);
+  const biasLookup = buildBiasLookup(biases);
+  const peoplePrefs = getAttentionPersonPreferences(settings);
+  return (target) => scoreTarget(target, focusLookup, biasLookup, peoplePrefs);
 }
 
 export function mergeAttentionSettings(
