@@ -209,10 +209,19 @@ export async function ensureUserSettings(cortexUserId: string) {
   const supabase = createServiceClient();
   const defaults = createEmptyUserSettings(cortexUserId);
 
+  // Insert defaults only if no row exists (ON CONFLICT DO NOTHING).
+  // Without ignoreDuplicates the upsert overwrites every JSONB column
+  // (dashboard, onboarding, advanced_ranking) with empty objects, wiping
+  // all stored preferences on every read.
+  await supabase
+    .from("user_settings")
+    .upsert(defaults, { onConflict: "cortex_user_id", ignoreDuplicates: true });
+
+  // Always read current state
   const { data, error } = await supabase
     .from("user_settings")
-    .upsert(defaults, { onConflict: "cortex_user_id" })
-    .select()
+    .select("*")
+    .eq("cortex_user_id", cortexUserId)
     .single();
 
   if (error) {

@@ -12,6 +12,7 @@ import { usePeople } from "@/hooks/usePeople";
 import { useSalesforce } from "@/hooks/useSalesforce";
 import { useSlackFeed } from "@/hooks/useSlackFeed";
 import { useTasks } from "@/hooks/useTasks";
+import { MorningBrief } from "@/components/command-center/MorningBrief";
 import {
   buildAsanaCommentAttentionTarget,
   buildCalendarAttentionTarget,
@@ -339,6 +340,8 @@ export function HomeView({
 
   return (
     <div className="space-y-5">
+      <MorningBrief onOpenCalendarPrep={onOpenCalendarPrep} />
+
       <section className="glass-card anim-card overflow-hidden" style={{ animationDelay: "0ms" }}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(0,163,225,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(0,178,169,0.12),transparent_32%)]" />
         <div className="relative grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
