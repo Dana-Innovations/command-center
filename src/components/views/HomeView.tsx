@@ -22,6 +22,7 @@ import {
 } from "@/lib/attention/targets";
 import { type SetupFocusTab, type TabId } from "@/lib/tab-config";
 import { useAttention } from "@/lib/attention/client";
+import { getAttentionPersonRankingWeight } from "@/lib/attention/people";
 import { cn } from "@/lib/utils";
 
 type CommunicationCardItem =
@@ -151,6 +152,7 @@ export function HomeView({
     services,
     onboardingCompleted,
     applyTarget,
+    getPersonPreference,
   } = useAttention();
 
   const connectedServices = services.filter((service) => service.connected);
@@ -210,12 +212,20 @@ export function HomeView({
   const peopleToWatch = useMemo(() => {
     return [...people]
       .sort((a, b) => {
+        const preferenceDelta =
+          getAttentionPersonRankingWeight(
+            getPersonPreference({ name: b.name, email: b.email ?? null })
+          ) -
+          getAttentionPersonRankingWeight(
+            getPersonPreference({ name: a.name, email: a.email ?? null })
+          );
+        if (preferenceDelta !== 0) return preferenceDelta;
         const urgencyDelta = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
         if (urgencyDelta !== 0) return urgencyDelta;
         return b.touchpoints - a.touchpoints;
       })
       .slice(0, 5);
-  }, [people]);
+  }, [getPersonPreference, people]);
 
   const performanceWatchlist = useMemo(() => {
     return openOpps
@@ -571,37 +581,59 @@ export function HomeView({
           <p className="text-sm text-text-muted">No relationship signals are available yet.</p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {peopleToWatch.map((person) => (
-              <div
-                key={person.name}
-                className="rounded-[20px] border border-[var(--bg-card-border)] bg-white/[0.03] p-4"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
-                      person.urgency === "red" && "bg-accent-red/15 text-accent-red",
-                      person.urgency === "amber" && "bg-accent-amber/15 text-accent-amber",
-                      person.urgency === "teal" && "bg-accent-teal/15 text-accent-teal",
-                      person.urgency === "gray" && "bg-white/10 text-text-muted"
-                    )}
-                  >
-                    {person.name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-text-heading">{person.name}</p>
-                    <p className="text-xs text-text-muted">
-                      {person.touchpoints} touchpoint{person.touchpoints === 1 ? "" : "s"} · {person.action}
-                    </p>
+            {peopleToWatch.map((person) => {
+              const preference = getPersonPreference({
+                name: person.name,
+                email: person.email ?? null,
+              });
+
+              return (
+                <div
+                  key={person.name}
+                  className="rounded-[20px] border border-[var(--bg-card-border)] bg-white/[0.03] p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
+                        person.urgency === "red" && "bg-accent-red/15 text-accent-red",
+                        person.urgency === "amber" && "bg-accent-amber/15 text-accent-amber",
+                        person.urgency === "teal" && "bg-accent-teal/15 text-accent-teal",
+                        person.urgency === "gray" && "bg-white/10 text-text-muted"
+                      )}
+                    >
+                      {person.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-text-heading">
+                          {person.name}
+                        </p>
+                        {preference?.important && (
+                          <span className="rounded-full bg-accent-amber/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-accent-amber">
+                            Important
+                          </span>
+                        )}
+                        {preference?.pinned && (
+                          <span className="rounded-full bg-accent-teal/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-accent-teal">
+                            Pinned
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-muted">
+                        {person.touchpoints} touchpoint
+                        {person.touchpoints === 1 ? "" : "s"} · {person.action}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

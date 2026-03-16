@@ -8,6 +8,10 @@ import type {
   PriorityBiasRecord,
   UserSettingsRecord,
 } from "@/lib/attention/types";
+import {
+  getAttentionPersonScoreBoost,
+  resolveAttentionPersonPreferenceForTarget,
+} from "@/lib/attention/people";
 
 const TOPIC_STOP_WORDS = new Set([
   "about",
@@ -332,15 +336,29 @@ export function computeLearnedBias(
 export function applyAttentionProfile(
   target: AttentionTarget,
   focusPreferences: FocusPreferenceRecord[],
-  biases: PriorityBiasRecord[]
+  biases: PriorityBiasRecord[],
+  settings?: UserSettingsRecord | null
 ): AttentionItem {
   const explicitImportance = resolveExplicitImportance(target, focusPreferences);
   const learnedBias = computeLearnedBias(target, biases);
+  const personPreference = resolveAttentionPersonPreferenceForTarget(
+    settings,
+    target
+  );
+  const personBoost = getAttentionPersonScoreBoost(personPreference);
   const importanceBoost = IMPORTANCE_BOOSTS[explicitImportance];
   const hidden = explicitImportance === "muted";
   const finalScore = hidden
     ? 0
-    : Math.max(0, Math.min(100, Math.round(target.baseScore + importanceBoost + learnedBias)));
+    : Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            target.baseScore + importanceBoost + learnedBias + personBoost
+          )
+        )
+      );
 
   const explanation: string[] = [];
   if (explicitImportance !== "normal") {
@@ -351,6 +369,12 @@ export function applyAttentionProfile(
           ? "Quiet focus"
           : "Muted focus"
     );
+  }
+  if (personPreference?.important) {
+    explanation.push("Important person");
+  }
+  if (personPreference?.pinned) {
+    explanation.push("Pinned person");
   }
   if (learnedBias > 0.4) {
     explanation.push(`Learned boost +${learnedBias}`);

@@ -31,6 +31,9 @@ export interface ReplyQueueItem {
   id: string;
   source: ReplySource;
   attentionTarget: AttentionTarget;
+  taskGid?: string;
+  taskDueOn?: string | null;
+  projectGid?: string | null;
   title: string;
   sender: string;
   senderEmail?: string | null;
@@ -925,6 +928,9 @@ export function buildReplyQueue({
         "reply-center",
         scoreResult.score
       ),
+      taskGid: thread.task_gid,
+      taskDueOn: thread.task_due_on,
+      projectGid: thread.project_gid || null,
       title: thread.task_name,
       sender: thread.latest_commenter_name || "Asana",
       senderEmail: thread.latest_commenter_email || null,

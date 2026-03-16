@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PeopleFocusManager } from "@/components/ui/PeopleFocusManager";
 import { useToast } from "@/components/ui/toast";
 import { useAttention } from "@/lib/attention/client";
 import type {
@@ -292,6 +293,7 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
     setNodeImportance,
     refreshProfile,
     completeOnboarding,
+    peoplePreferences,
   } = useAttention();
   const { addToast } = useToast();
   const [search, setSearch] = useState("");
@@ -580,7 +582,10 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
             </div>
             <p className="mt-2 text-sm text-text-muted">
               {(profile?.focusPreferences ?? []).length} structural focus rule
-              {(profile?.focusPreferences ?? []).length === 1 ? "" : "s"} saved.
+              {(profile?.focusPreferences ?? []).length === 1 ? "" : "s"} saved
+              {peoplePreferences.length > 0
+                ? ` · ${peoplePreferences.length} people tuned.`
+                : "."}
             </p>
           </div>
           <div className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-4">
@@ -712,251 +717,288 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
         )}
 
         {setupTab === "focus" && (
-          <div className="grid gap-5 overflow-hidden pt-5 xl:grid-cols-[250px_minmax(0,1fr)_300px]">
-            <section className="overflow-y-auto rounded-[24px] border border-[var(--bg-card-border)] bg-black/10 p-4">
-              <div className="mb-4">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-text-muted">
-                  Providers
-                </div>
-                <p className="mt-1 text-sm text-text-muted">
-                  Start broad, then drill into the specific resources that matter.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {focusProviders.length > 0 ? (
-                  focusProviders.map((provider) => {
-                    const explicitCount = (profile?.focusPreferences ?? []).filter(
-                      (entry) => entry.provider === provider.provider
-                    ).length;
-                    return (
-                      <button
-                        key={provider.provider}
-                        type="button"
-                        onClick={() => setSelectedProvider(provider.provider)}
-                        className={cn(
-                          "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
-                          provider.provider === providerNode?.provider
-                            ? "border-accent-amber/40 bg-[var(--tab-active-bg)]"
-                            : "border-[var(--bg-card-border)] bg-white/[0.03] hover:bg-white/[0.06]"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-text-heading">
-                            {provider.label}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                            {provider.importance}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-text-muted">
-                          {explicitCount > 0
-                            ? `${explicitCount} saved focus rules`
-                            : provider.description}
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <FocusStatusCard
-                    title="No supported providers yet"
-                    body={
-                      selectedFocusError?.message ||
-                      "The focus map did not return any supported providers."
-                    }
-                    tone={selectedFocusError ? "error" : "default"}
-                    actionLabel="Retry focus map"
-                    onAction={retrySelectedProvider}
-                  />
-                )}
-              </div>
-            </section>
+          <div className="space-y-5 pt-5">
+            <PeopleFocusManager />
 
-            <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-[var(--bg-card-border)] bg-black/10">
-              <div className="border-b border-[var(--bg-card-border)] px-5 py-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid gap-5 overflow-hidden xl:grid-cols-[250px_minmax(0,1fr)_300px]">
+              <section className="overflow-y-auto rounded-[24px] border border-[var(--bg-card-border)] bg-black/10 p-4">
+                <div className="mb-4">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-text-muted">
+                    Providers
+                  </div>
+                  <p className="mt-1 text-sm text-text-muted">
+                    Start broad, then drill into the specific resources that matter.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {focusProviders.length > 0 ? (
+                    focusProviders.map((provider) => {
+                      const explicitCount = (profile?.focusPreferences ?? []).filter(
+                        (entry) => entry.provider === provider.provider
+                      ).length;
+                      return (
+                        <button
+                          key={provider.provider}
+                          type="button"
+                          onClick={() => setSelectedProvider(provider.provider)}
+                          className={cn(
+                            "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                            provider.provider === providerNode?.provider
+                              ? "border-accent-amber/40 bg-[var(--tab-active-bg)]"
+                              : "border-[var(--bg-card-border)] bg-white/[0.03] hover:bg-white/[0.06]"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-text-heading">
+                              {provider.label}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                              {provider.importance}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs text-text-muted">
+                            {explicitCount > 0
+                              ? `${explicitCount} saved focus rules`
+                              : provider.description}
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <FocusStatusCard
+                      title="No supported providers yet"
+                      body={
+                        selectedFocusError?.message ||
+                        "The focus map did not return any supported providers."
+                      }
+                      tone={selectedFocusError ? "error" : "default"}
+                      actionLabel="Retry focus map"
+                      onAction={retrySelectedProvider}
+                    />
+                  )}
+                </div>
+              </section>
+
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-[var(--bg-card-border)] bg-black/10">
+                <div className="border-b border-[var(--bg-card-border)] px-5 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold text-text-heading">
+                          {providerNode?.label ?? "Focus"}
+                        </h2>
+                        {focusMapLoading && focusProviders.length > 0 && (
+                          <span className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                            Refreshing
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-text-muted">
+                        Set the attention tier for the resources that matter most.
+                      </p>
+                    </div>
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search folders, projects, teams..."
+                      className="h-10 w-full rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.04] px-3 text-sm text-text-heading outline-none placeholder:text-text-muted lg:w-72"
+                    />
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                  <div className="space-y-4">
+                    {focusActionError && (
+                      <FocusStatusCard
+                        title="Channels could not be loaded"
+                        body={focusActionError}
+                        tone="error"
+                        actionLabel={teamRetryNodeId ? "Retry loading channels" : "Retry"}
+                        onAction={
+                          teamRetryNodeId ? retryTeamChannels : retrySelectedProvider
+                        }
+                      />
+                    )}
+
+                    {selectedFocusError && !focusActionError && (
+                      <FocusStatusCard
+                        title="Focus map could not be refreshed"
+                        body={`${selectedFocusError.message} The last successful provider map will stay visible until the next refresh works.`}
+                        tone="error"
+                        actionLabel="Retry provider"
+                        onAction={retrySelectedProvider}
+                      />
+                    )}
+
+                    {selectedWarnings.map((warning) => (
+                      <FocusStatusCard
+                        key={`${warning.provider ?? "global"}-${warning.code}-${warning.scope ?? "all"}`}
+                        title={
+                          warning.provider
+                            ? `${providerNode?.label ?? "Focus"} warning`
+                            : "Focus setup warning"
+                        }
+                        body={warning.message}
+                        tone="warning"
+                        actionLabel="Retry provider"
+                        onAction={retrySelectedProvider}
+                      />
+                    ))}
+
+                    {showInitialFocusLoading ? (
+                      <FocusStatusCard
+                        title="Loading focus map"
+                        body="Discovering your supported providers and their available resources."
+                      />
+                    ) : !providerNode ? (
+                      <FocusStatusCard
+                        title="No provider selected"
+                        body="Choose a supported provider from the left to start shaping what rises and fades."
+                      />
+                    ) : !providerNode.connected ? (
+                      <FocusStatusCard
+                        title={`${providerNode.label} is not connected`}
+                        body={`Connect ${PROVIDER_CONNECTION_LABELS[providerNode.provider]} in the Connections tab to load its folders, boards, teams, or channels here.`}
+                        actionLabel="Open Connections"
+                        onAction={() => setSetupTab("connections")}
+                      />
+                    ) : isSearching && filteredNodes.length === 0 ? (
+                      <FocusStatusCard
+                        title="No matching resources"
+                        body={`No ${providerNode.label} resources match "${search.trim()}". Try a broader search.`}
+                      />
+                    ) : !hasProviderInventory ? (
+                      <FocusStatusCard
+                        title={`No ${providerNode.label} resources discovered yet`}
+                        body={`This provider is connected, but no drill-down resources are available yet. Refresh the provider inventory or reconnect it from the Connections tab.`}
+                        tone={selectedWarnings.length > 0 ? "warning" : "default"}
+                        actionLabel="Refresh provider"
+                        onAction={retrySelectedProvider}
+                      />
+                    ) : (
+                      <FocusTree
+                        nodes={filteredNodes}
+                        pendingNodeId={pendingNodeId}
+                        onSelectNode={(node) => void handleSelectNode(node)}
+                        onChangeImportance={(node, next) =>
+                          void handleChangeImportance(node, next)
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="overflow-y-auto rounded-[24px] border border-[var(--bg-card-border)] bg-black/10 p-5">
+                <h2 className="text-lg font-semibold text-text-heading">
+                  Live preview
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  This is the current structural focus profile that will drive
+                  default surfacing and fetch priority.
+                </p>
+
+                <div className="mt-5 space-y-5">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-text-heading">
-                        {providerNode?.label ?? "Focus"}
-                      </h2>
-                      {focusMapLoading && focusProviders.length > 0 && (
-                        <span className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                          Refreshing
-                        </span>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-accent-green">
+                      What will rise
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {profileLoading && !profile ? (
+                        <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                          Loading saved focus rules...
+                        </div>
+                      ) : preview.rise.length > 0 ? (
+                        preview.rise.map((record) => (
+                          <div
+                            key={record.key}
+                            className="rounded-2xl border border-accent-green/20 bg-accent-green/10 px-3 py-3 text-sm text-text-body"
+                          >
+                            <div className="font-medium text-text-heading">
+                              {record.label}
+                            </div>
+                            <div className="mt-1 text-xs text-text-muted">
+                              {record.provider} · {record.entityType}
+                              {record.assumed ? " · assumed default" : ""}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                          No critical focus rules yet.
+                        </div>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-text-muted">
-                      Set the attention tier for the resources that matter most.
-                    </p>
                   </div>
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search folders, projects, teams..."
-                    className="h-10 w-full rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.04] px-3 text-sm text-text-heading outline-none placeholder:text-text-muted lg:w-72"
-                  />
-                </div>
-              </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-                <div className="space-y-4">
-                  {focusActionError && (
-                    <FocusStatusCard
-                      title="Channels could not be loaded"
-                      body={focusActionError}
-                      tone="error"
-                      actionLabel={teamRetryNodeId ? "Retry loading channels" : "Retry"}
-                      onAction={
-                        teamRetryNodeId ? retryTeamChannels : retrySelectedProvider
-                      }
-                    />
-                  )}
-
-                  {selectedFocusError && !focusActionError && (
-                    <FocusStatusCard
-                      title="Focus map could not be refreshed"
-                      body={`${selectedFocusError.message} The last successful provider map will stay visible until the next refresh works.`}
-                      tone="error"
-                      actionLabel="Retry provider"
-                      onAction={retrySelectedProvider}
-                    />
-                  )}
-
-                  {selectedWarnings.map((warning) => (
-                    <FocusStatusCard
-                      key={`${warning.provider ?? "global"}-${warning.code}-${warning.scope ?? "all"}`}
-                      title={
-                        warning.provider
-                          ? `${providerNode?.label ?? "Focus"} warning`
-                          : "Focus setup warning"
-                      }
-                      body={warning.message}
-                      tone="warning"
-                      actionLabel="Retry provider"
-                      onAction={retrySelectedProvider}
-                    />
-                  ))}
-
-                  {showInitialFocusLoading ? (
-                    <FocusStatusCard
-                      title="Loading focus map"
-                      body="Discovering your supported providers and their available resources."
-                    />
-                  ) : !providerNode ? (
-                    <FocusStatusCard
-                      title="No provider selected"
-                      body="Choose a supported provider from the left to start shaping what rises and fades."
-                    />
-                  ) : !providerNode.connected ? (
-                    <FocusStatusCard
-                      title={`${providerNode.label} is not connected`}
-                      body={`Connect ${PROVIDER_CONNECTION_LABELS[providerNode.provider]} in the Connections tab to load its folders, boards, teams, or channels here.`}
-                      actionLabel="Open Connections"
-                      onAction={() => setSetupTab("connections")}
-                    />
-                  ) : isSearching && filteredNodes.length === 0 ? (
-                    <FocusStatusCard
-                      title="No matching resources"
-                      body={`No ${providerNode.label} resources match "${search.trim()}". Try a broader search.`}
-                    />
-                  ) : !hasProviderInventory ? (
-                    <FocusStatusCard
-                      title={`No ${providerNode.label} resources discovered yet`}
-                      body={`This provider is connected, but no drill-down resources are available yet. Refresh the provider inventory or reconnect it from the Connections tab.`}
-                      tone={selectedWarnings.length > 0 ? "warning" : "default"}
-                      actionLabel="Refresh provider"
-                      onAction={retrySelectedProvider}
-                    />
-                  ) : (
-                    <FocusTree
-                      nodes={filteredNodes}
-                      pendingNodeId={pendingNodeId}
-                      onSelectNode={(node) => void handleSelectNode(node)}
-                      onChangeImportance={(node, next) =>
-                        void handleChangeImportance(node, next)
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="overflow-y-auto rounded-[24px] border border-[var(--bg-card-border)] bg-black/10 p-5">
-              <h2 className="text-lg font-semibold text-text-heading">
-                Live preview
-              </h2>
-              <p className="mt-1 text-sm text-text-muted">
-                This is the current structural focus profile that will drive
-                default surfacing and fetch priority.
-              </p>
-
-              <div className="mt-5 space-y-5">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-accent-green">
-                    What will rise
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {profileLoading && !profile ? (
-                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
-                        Loading saved focus rules...
-                      </div>
-                    ) : preview.rise.length > 0 ? (
-                      preview.rise.map((record) => (
-                        <div
-                          key={record.key}
-                          className="rounded-2xl border border-accent-green/20 bg-accent-green/10 px-3 py-3 text-sm text-text-body"
-                        >
-                          <div className="font-medium text-text-heading">
-                            {record.label}
-                          </div>
-                          <div className="mt-1 text-xs text-text-muted">
-                            {record.provider} · {record.entityType}
-                            {record.assumed ? " · assumed default" : ""}
-                          </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-accent-red">
+                      What will fade
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {profileLoading && !profile ? (
+                        <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                          Loading saved focus rules...
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
-                        No critical focus rules yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-accent-red">
-                    What will fade
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {profileLoading && !profile ? (
-                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
-                        Loading saved focus rules...
-                      </div>
-                    ) : preview.fade.length > 0 ? (
-                      preview.fade.map((record) => (
-                        <div
-                          key={record.key}
-                          className="rounded-2xl border border-accent-red/20 bg-accent-red/10 px-3 py-3 text-sm text-text-body"
-                        >
-                          <div className="font-medium text-text-heading">
-                            {record.label}
+                      ) : preview.fade.length > 0 ? (
+                        preview.fade.map((record) => (
+                          <div
+                            key={record.key}
+                            className="rounded-2xl border border-accent-red/20 bg-accent-red/10 px-3 py-3 text-sm text-text-body"
+                          >
+                            <div className="font-medium text-text-heading">
+                              {record.label}
+                            </div>
+                            <div className="mt-1 text-xs text-text-muted">
+                              {record.provider} · {record.importance}
+                              {record.assumed ? " · assumed default" : ""}
+                            </div>
                           </div>
-                          <div className="mt-1 text-xs text-text-muted">
-                            {record.provider} · {record.importance}
-                            {record.assumed ? " · assumed default" : ""}
-                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                          No quiet or muted rules yet.
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
-                        No quiet or muted rules yet.
-                      </div>
-                    )}
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-accent-teal">
+                      People that stay elevated
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {peoplePreferences.length > 0 ? (
+                        peoplePreferences.slice(0, 8).map((preference) => (
+                          <div
+                            key={preference.id}
+                            className="rounded-2xl border border-accent-teal/20 bg-accent-teal/10 px-3 py-3 text-sm text-text-body"
+                          >
+                            <div className="font-medium text-text-heading">
+                              {preference.name}
+                            </div>
+                            <div className="mt-1 text-xs text-text-muted">
+                              {[
+                                preference.important ? "important" : null,
+                                preference.pinned ? "pinned" : null,
+                                preference.email ?? null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-3 py-3 text-sm text-text-muted">
+                          No people are pinned or marked important yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
         )}
 

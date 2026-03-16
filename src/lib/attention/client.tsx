@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import type { AttentionPersonPreference } from "@/lib/attention/people";
 import type {
   AttentionProvider,
   AttentionFeedbackValue,
@@ -25,6 +26,14 @@ import type {
 } from "@/lib/attention/types";
 import { applyAttentionProfile } from "@/lib/attention/utils";
 import type { SetupFocusTab } from "@/lib/tab-config";
+import {
+  buildAttentionPeopleDashboardValue,
+  getAttentionPersonPreferences,
+  getSeededAttentionPeopleForUser,
+  matchAttentionPersonPreference,
+  removeAttentionPersonPreference,
+  upsertAttentionPersonPreference,
+} from "@/lib/attention/people";
 import {
   createDefaultReplyPriorityPreferences,
   mergeReplyPriorityPreferences,
@@ -64,6 +73,7 @@ interface AttentionContextValue {
   setupTab: SetupFocusTab;
   focusRevision: number;
   replyPreferences: ReplyPriorityPreferences;
+  peoplePreferences: AttentionPersonPreference[];
   openSetupFocus: (tab?: SetupFocusTab) => void;
   setSetupTab: (tab: SetupFocusTab) => void;
   refreshProfile: () => Promise<void>;
@@ -76,6 +86,16 @@ interface AttentionContextValue {
   setNodeImportance: (node: FocusNode, importance: ImportanceTier) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   updateReplyPreferences: (preferences: ReplyPriorityPreferences) => Promise<void>;
+  upsertPersonPreference: (
+    preference: AttentionPersonPreference
+  ) => Promise<void>;
+  removePersonPreference: (preferenceId: string) => Promise<void>;
+  getPersonPreference: (args: {
+    name?: string | null;
+    email?: string | null;
+    aliases?: string[] | null;
+    actorKeys?: string[] | null;
+  }) => AttentionPersonPreference | null;
   getItemFeedback: (
     itemType: string,
     itemId: string
@@ -169,6 +189,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   const [setupTab, setSetupTab] = useState<SetupFocusTab>("focus");
   const [focusRevision, setFocusRevision] = useState(0);
   const migratedLegacyRef = useRef(false);
+  const seededPeopleRef = useRef(false);
 
   const refreshProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -294,6 +315,11 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     [profile]
   );
 
+  const peoplePreferences = useMemo(
+    () => getAttentionPersonPreferences(profile?.settings),
+    [profile]
+  );
+
   const savePreferences = useCallback(
     async (body: {
       settings?: Record<string, unknown>;
@@ -407,6 +433,43 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     setSetupTab(tab);
   }, []);
 
+  const upsertPersonPreference = useCallback(
+    async (preference: AttentionPersonPreference) => {
+      const next = upsertAttentionPersonPreference(peoplePreferences, preference);
+      await savePreferences({
+        settings: {
+          dashboard: buildAttentionPeopleDashboardValue(next),
+        },
+      });
+    },
+    [peoplePreferences, savePreferences]
+  );
+
+  const removePersonPreference = useCallback(
+    async (preferenceId: string) => {
+      const next = removeAttentionPersonPreference(
+        peoplePreferences,
+        preferenceId
+      );
+      await savePreferences({
+        settings: {
+          dashboard: buildAttentionPeopleDashboardValue(next),
+        },
+      });
+    },
+    [peoplePreferences, savePreferences]
+  );
+
+  const getPersonPreference = useCallback(
+    (args: {
+      name?: string | null;
+      email?: string | null;
+      aliases?: string[] | null;
+      actorKeys?: string[] | null;
+    }) => matchAttentionPersonPreference(peoplePreferences, args),
+    [peoplePreferences]
+  );
+
   const ensureTeamChannels = useCallback(
     async (teamId: string) => {
       if (!teamId) {
@@ -483,6 +546,26 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     [savePreferences]
   );
 
+  useEffect(() => {
+    if (!profile || !user || seededPeopleRef.current) return;
+
+    const seededPeople = getSeededAttentionPeopleForUser(user.email);
+    seededPeopleRef.current = true;
+
+    if (peoplePreferences.length > 0 || seededPeople.length === 0) {
+      return;
+    }
+
+    void savePreferences({
+      settings: {
+        dashboard: buildAttentionPeopleDashboardValue(seededPeople),
+      },
+    }).catch(() => {
+      seededPeopleRef.current = false;
+      // Errors surface via profileError state.
+    });
+  }, [peoplePreferences.length, profile, savePreferences, user]);
+
   const getItemFeedback = useCallback(
     (itemType: string, itemId: string) =>
       profile?.feedback.find(
@@ -522,7 +605,8 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       applyAttentionProfile(
         target,
         profile?.focusPreferences ?? [],
-        profile?.biases ?? []
+        profile?.biases ?? [],
+        profile?.settings
       ),
     [profile]
   );
@@ -539,6 +623,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       focusMapLoading,
       servicesLoading,
       onboardingCompleted,
+      peoplePreferences,
       setupTab,
       focusRevision,
       replyPreferences,
@@ -551,6 +636,9 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       setNodeImportance,
       completeOnboarding,
       updateReplyPreferences,
+      upsertPersonPreference,
+      removePersonPreference,
+      getPersonPreference,
       getItemFeedback,
       submitFeedback,
       applyTarget,
@@ -565,8 +653,10 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       focusMapWarnings,
       focusRevision,
       getItemFeedback,
+      getPersonPreference,
       onboardingCompleted,
       openSetupFocus,
+      peoplePreferences,
       profile,
       profileError,
       profileLoading,
@@ -579,6 +669,8 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       setNodeImportance,
       setupTab,
       submitFeedback,
+      removePersonPreference,
+      upsertPersonPreference,
       updateReplyPreferences,
     ]
   );

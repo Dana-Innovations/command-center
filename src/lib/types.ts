@@ -135,6 +135,29 @@ export interface AsanaCommentThread {
   synced_at: string;
 }
 
+export interface AsanaCommentEntry {
+  id: string;
+  text: string;
+  created_at: string;
+  author_name: string;
+  author_email?: string | null;
+}
+
+export interface AsanaThreadDetail {
+  task_gid: string;
+  task_name: string;
+  task_due_on: string | null;
+  project_gid?: string | null;
+  project_name: string;
+  permalink_url: string;
+  completed: boolean;
+  notes: string;
+  assignee_name?: string | null;
+  assignee_email?: string | null;
+  recent_comments: AsanaCommentEntry[];
+  synced_at: string;
+}
+
 export interface ActionQueueItem {
   id: string;
   action_type: string;

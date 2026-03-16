@@ -7,6 +7,8 @@ import { useSalesforce } from "@/hooks/useSalesforce";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PersonDetailPanel } from "./PersonDetailPanel";
 import type { TouchpointItem } from "@/hooks/usePeople";
+import { useAttention } from "@/lib/attention/client";
+import { getAttentionPersonRankingWeight } from "@/lib/attention/people";
 import type {
   UnifiedContact,
   SourceFilter,
@@ -31,6 +33,7 @@ import {
 export function UnifiedPeopleView() {
   const { people, loading: peopleLoading } = usePeople();
   const { openOpps, loading: sfLoading } = useSalesforce();
+  const { getPersonPreference } = useAttention();
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<UnifiedContact | null>(null);
   const [urgencyFilter, setUrgencyFilter] = useState<"all" | "red" | "amber" | "teal" | "gray">("all");
@@ -63,6 +66,10 @@ export function UnifiedPeopleView() {
       ).length;
       const taskCount = person.items.filter((i) => i.ch === "asana").length;
       const openItemCount = emailCount + taskCount + relatedOpps.length;
+      const attentionPreference = getPersonPreference({
+        name: person.name,
+        email: person.email ?? null,
+      });
 
       return {
         ...person,
@@ -72,9 +79,10 @@ export function UnifiedPeopleView() {
         lastChannel: lastCh,
         lastInteractionDate: lastDate,
         relatedOpps,
+        attentionPreference,
       };
     });
-  }, [people, openOpps, now]);
+  }, [getPersonPreference, now, openOpps, people]);
 
   // Apply filters
   const filtered = useMemo(() => {
@@ -107,6 +115,20 @@ export function UnifiedPeopleView() {
 
   const maxTouchpoints = useMemo(
     () => Math.max(1, ...filtered.map((p) => p.touchpoints)),
+    [filtered]
+  );
+
+  const pinnedContacts = useMemo(
+    () =>
+      [...filtered]
+        .filter((contact) => contact.attentionPreference?.pinned)
+        .sort((a, b) => {
+          const preferenceDelta =
+            getAttentionPersonRankingWeight(b.attentionPreference) -
+            getAttentionPersonRankingWeight(a.attentionPreference);
+          if (preferenceDelta !== 0) return preferenceDelta;
+          return b.touchpoints - a.touchpoints;
+        }),
     [filtered]
   );
 
@@ -226,14 +248,45 @@ export function UnifiedPeopleView() {
       </div>
 
       {/* ── Grouped Contact Grid ──────────────────────────────── */}
+      {pinnedContacts.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-accent-teal">
+              Pinned
+            </h3>
+            <span className="text-[10px] bg-white/5 text-text-muted px-2 py-0.5 rounded-full">
+              {pinnedContacts.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {pinnedContacts.map((contact) => (
+              <ContactCard
+                key={`pinned-${contact.name}`}
+                contact={contact}
+                maxTouchpoints={maxTouchpoints}
+                isExpanded={expandedCards.has(contact.name)}
+                onToggle={() => toggle(contact.name)}
+                onDeepDive={() => setSelectedPerson(contact)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {TIER_CONFIG.map((tier) => {
-        const tierPeople = filtered.filter((c) => c.urgency === tier.key);
+        const tierPeople = filtered.filter(
+          (c) => c.urgency === tier.key && !c.attentionPreference?.pinned
+        );
         if (tierPeople.length === 0) return null;
 
-        // Sort within tier: most touchpoints first
-        const sorted = [...tierPeople].sort(
-          (a, b) => b.touchpoints - a.touchpoints
-        );
+        const sorted = [...tierPeople].sort((a, b) => {
+          const preferenceDelta =
+            getAttentionPersonRankingWeight(b.attentionPreference) -
+            getAttentionPersonRankingWeight(a.attentionPreference);
+          if (preferenceDelta !== 0) return preferenceDelta;
+          return b.touchpoints - a.touchpoints;
+        });
 
         return (
           <div key={tier.key}>
@@ -357,6 +410,16 @@ function ContactCard({
               <span className="text-[13px] font-semibold text-text-heading">
                 {contact.name}
               </span>
+              {contact.attentionPreference?.important && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent-amber/10 text-accent-amber">
+                  Important
+                </span>
+              )}
+              {contact.attentionPreference?.pinned && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent-teal/10 text-accent-teal">
+                  Pinned
+                </span>
+              )}
               {/* Heat dot */}
               <span
                 className={cn("w-2 h-2 rounded-full shrink-0", heatCfg.dot)}

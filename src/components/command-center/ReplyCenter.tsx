@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ExternalLinkIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,7 +12,9 @@ import { useChats } from "@/hooks/useChats";
 import { useSlackFeed } from "@/hooks/useSlackFeed";
 import { useAsanaComments } from "@/hooks/useAsanaComments";
 import { useAttention } from "@/lib/attention/client";
+import { useLiveData } from "@/lib/live-data-context";
 import type { EmailDetail } from "@/lib/email-reply";
+import type { AsanaCommentEntry, AsanaThreadDetail, Task } from "@/lib/types";
 import {
   buildOutlookComposeUrl,
   buildReplyQueue,
@@ -207,6 +209,215 @@ function buildScoreBreakdownLine(item: ReplyQueueItem) {
     .join(" · ");
 }
 
+function formatAbsoluteDateTime(value: string) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Los_Angeles",
+  });
+}
+
+function formatDueLabel(value: string | null | undefined) {
+  if (!value) return "No due date";
+
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const dueDate = new Date(dateOnly ? `${value}T00:00:00` : value);
+  if (Number.isNaN(dueDate.getTime())) {
+    return "No due date";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dueDate);
+  target.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round(
+    (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays < 0) {
+    return diffDays === -1 ? "Overdue by 1 day" : `Overdue by ${Math.abs(diffDays)} days`;
+  }
+  if (diffDays === 0) return "Due today";
+  if (diffDays === 1) return "Due tomorrow";
+
+  return `Due ${dueDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "America/Los_Angeles",
+  })}`;
+}
+
+function splitUrlFromTrail(value: string) {
+  let url = value;
+  let trail = "";
+
+  while (url && /[).,!?;:]$/.test(url)) {
+    trail = `${url.slice(-1)}${trail}`;
+    url = url.slice(0, -1);
+  }
+
+  return { url, trail };
+}
+
+function renderLinkedLine(value: string, keyPrefix: string) {
+  const pattern = /(https?:\/\/[^\s<]+)/g;
+  const matches = Array.from(value.matchAll(pattern));
+
+  if (matches.length === 0) {
+    return value;
+  }
+
+  let cursor = 0;
+  const nodes: ReactNode[] = [];
+
+  matches.forEach((match, index) => {
+    const raw = match[0];
+    const start = match.index ?? 0;
+
+    if (start > cursor) {
+      nodes.push(value.slice(cursor, start));
+    }
+
+    const { url, trail } = splitUrlFromTrail(raw);
+    nodes.push(
+      <Fragment key={`${keyPrefix}-url-${index}`}>
+        <a
+          className="hot-link break-all text-accent-amber"
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {url}
+        </a>
+        {trail}
+      </Fragment>
+    );
+
+    cursor = start + raw.length;
+  });
+
+  if (cursor < value.length) {
+    nodes.push(value.slice(cursor));
+  }
+
+  return nodes;
+}
+
+function renderFormattedText(
+  value: string | null | undefined,
+  keyPrefix: string,
+  paragraphClassName = "text-sm leading-6 text-text-body"
+) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return (
+      <p className="text-sm text-text-muted">No additional context yet.</p>
+    );
+  }
+
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return paragraphs.map((paragraph, paragraphIndex) => {
+    const lines = paragraph.split("\n").filter(Boolean);
+
+    return (
+      <p
+        key={`${keyPrefix}-paragraph-${paragraphIndex}`}
+        className={paragraphClassName}
+      >
+        {lines.map((line, lineIndex) => (
+          <Fragment key={`${keyPrefix}-line-${paragraphIndex}-${lineIndex}`}>
+            {renderLinkedLine(line, `${keyPrefix}-${paragraphIndex}-${lineIndex}`)}
+            {lineIndex < lines.length - 1 ? <br /> : null}
+          </Fragment>
+        ))}
+      </p>
+    );
+  });
+}
+
+function mergeRecentComments(
+  current: AsanaCommentEntry[],
+  next: AsanaCommentEntry
+) {
+  const merged = new Map<string, AsanaCommentEntry>();
+
+  for (const comment of current) {
+    merged.set(comment.id, comment);
+  }
+  merged.set(next.id, next);
+
+  return Array.from(merged.values())
+    .sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    .slice(-5);
+}
+
+function buildAsanaHydratedDetail(item: ReplyQueueItem, task: Task | null) {
+  const notes = task?.notes?.trim() || "";
+  const fallbackComment = item.message?.trim() || item.summary.trim();
+
+  return {
+    task_gid: item.taskGid || item.id,
+    task_name: task?.name || item.title,
+    task_due_on: task?.due_on || item.taskDueOn || null,
+    project_gid: task?.project_gid || item.projectGid || null,
+    project_name: task?.project_name || item.projectName || "Tasks",
+    permalink_url: task?.permalink_url || item.url,
+    completed: Boolean(task?.completed),
+    notes,
+    assignee_name: task?.assignee_name || null,
+    assignee_email: task?.assignee_email || null,
+    recent_comments: fallbackComment
+      ? [
+          {
+            id: `${item.id}:latest`,
+            text: fallbackComment,
+            created_at: item.timestamp,
+            author_name: item.sender || "Asana",
+            author_email: item.senderEmail || null,
+          },
+        ]
+      : [],
+    synced_at: task?.synced_at || item.timestamp,
+  } satisfies AsanaThreadDetail;
+}
+
+function buildAsanaDraftContext(
+  item: ReplyQueueItem,
+  detail: AsanaThreadDetail | null
+) {
+  const source = detail;
+  const parts = [
+    `Task: ${source?.task_name || item.title}`,
+    source?.project_name ? `Project: ${source.project_name}` : "",
+    source?.assignee_name ? `Assignee: ${source.assignee_name}` : "",
+    source?.task_due_on ? formatDueLabel(source.task_due_on) : "",
+    source?.notes ? `Task notes:\n${source.notes}` : "",
+    source?.recent_comments?.length
+      ? [
+          "Recent comments:",
+          ...source.recent_comments.map(
+            (comment) =>
+              `${comment.author_name} (${formatAbsoluteDateTime(comment.created_at)}): ${comment.text}`
+          ),
+        ].join("\n\n")
+      : "",
+  ].filter(Boolean);
+
+  return parts.join("\n\n");
+}
+
 function ScoreBadge({ score }: { score: number }) {
   const styles =
     score >= 80
@@ -321,6 +532,7 @@ export function ReplyCenter() {
   const { chats, loading: chatsLoading } = useChats();
   const { messages: slackMessages, loading: slackLoading } = useSlackFeed();
   const { comments: asanaComments, loading: asanaLoading } = useAsanaComments();
+  const { tasks, refetch: refetchLiveData } = useLiveData();
   const { user } = useAuth();
   const { applyTarget, replyPreferences, updateReplyPreferences } = useAttention();
   const { addToast } = useToast();
@@ -344,6 +556,7 @@ export function ReplyCenter() {
   const [storageReady, setStorageReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedAsanaId, setSelectedAsanaId] = useState<string | null>(null);
   const [composerState, setComposerState] = useState<{
     itemId: string;
     mode: ComposerMode;
@@ -361,6 +574,16 @@ export function ReplyCenter() {
   const [emailDetailErrors, setEmailDetailErrors] = useState<
     Record<string, string>
   >({});
+  const [asanaDetails, setAsanaDetails] = useState<
+    Record<string, AsanaThreadDetail>
+  >({});
+  const [asanaDetailLoading, setAsanaDetailLoading] = useState<
+    Record<string, boolean>
+  >({});
+  const [asanaDetailErrors, setAsanaDetailErrors] = useState<
+    Record<string, string>
+  >({});
+  const [postingAsanaId, setPostingAsanaId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storageKey) {
@@ -446,6 +669,10 @@ export function ReplyCenter() {
   );
 
   const isCustomized = hasCustomizedReplyPriorityPreferences(preferences);
+  const taskMap = useMemo(
+    () => new Map(tasks.map((task) => [task.task_gid, task])),
+    [tasks]
+  );
 
   const visibleItems = useMemo(() => {
     const now = Date.now();
@@ -475,6 +702,21 @@ export function ReplyCenter() {
         .length,
     };
   }, [attentionQueueItems, dismissedIds, snoozedUntil]);
+
+  const selectedAsanaItem = useMemo(
+    () =>
+      visibleItems.find(
+        (item) =>
+          item.id === selectedAsanaId && item.source === "asana_comment"
+      ) || null,
+    [selectedAsanaId, visibleItems]
+  );
+
+  useEffect(() => {
+    if (selectedAsanaId && !selectedAsanaItem) {
+      setSelectedAsanaId(null);
+    }
+  }, [selectedAsanaId, selectedAsanaItem]);
 
   async function ensureEmailDetail(item: ReplyQueueItem) {
     if (item.source !== "email" || !item.messageId) return null;
@@ -535,7 +777,108 @@ export function ReplyCenter() {
     }
   }
 
+  function getTaskForItem(item: ReplyQueueItem) {
+    if (!item.taskGid) return null;
+    return taskMap.get(item.taskGid) || null;
+  }
+
+  function getAsanaDetail(item: ReplyQueueItem) {
+    if (item.source !== "asana_comment" || !item.taskGid) return null;
+
+    return (
+      asanaDetails[item.taskGid] ||
+      buildAsanaHydratedDetail(item, getTaskForItem(item))
+    );
+  }
+
+  async function ensureAsanaDetail(item: ReplyQueueItem) {
+    if (item.source !== "asana_comment" || !item.taskGid) return null;
+
+    if (asanaDetails[item.taskGid]) {
+      return asanaDetails[item.taskGid];
+    }
+
+    if (asanaDetailLoading[item.taskGid]) {
+      return null;
+    }
+
+    setAsanaDetailLoading((current) => ({
+      ...current,
+      [item.taskGid!]: true,
+    }));
+    setAsanaDetailErrors((current) => {
+      const next = { ...current };
+      delete next[item.taskGid!];
+      return next;
+    });
+
+    try {
+      const res = await fetch(
+        `/api/data/asana-thread?taskGid=${encodeURIComponent(item.taskGid)}`
+      );
+      const data = (await res.json()) as AsanaThreadDetail | { error?: string };
+
+      if (!res.ok) {
+        throw new Error(
+          "error" in data && data.error ? data.error : `HTTP ${res.status}`
+        );
+      }
+
+      const detail = data as AsanaThreadDetail;
+      setAsanaDetails((current) => ({
+        ...current,
+        [item.taskGid!]: detail,
+      }));
+      return detail;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to load the Asana task.";
+      setAsanaDetailErrors((current) => ({
+        ...current,
+        [item.taskGid!]: message,
+      }));
+      return null;
+    } finally {
+      setAsanaDetailLoading((current) => ({
+        ...current,
+        [item.taskGid!]: false,
+      }));
+    }
+  }
+
+  function openAsanaInspector(
+    item: ReplyQueueItem,
+    mode: ComposerMode = "draft"
+  ) {
+    if (item.source !== "asana_comment") return;
+
+    setExpandedId(null);
+    setSelectedAsanaId(item.id);
+    setComposerState({ itemId: item.id, mode });
+    setDraftErrors((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+
+    if (mode === "ai" && !promptTexts[item.id]) {
+      setPromptTexts((current) => ({
+        ...current,
+        [item.id]: QUICK_PROMPTS.asana_comment[0].prompt,
+      }));
+    }
+
+    void ensureAsanaDetail(item);
+  }
+
   function toggleExpanded(item: ReplyQueueItem) {
+    if (item.source === "asana_comment") {
+      openAsanaInspector(item, "draft");
+      return;
+    }
+
     setExpandedId((current) => (current === item.id ? null : item.id));
     if (item.source === "email") {
       void ensureEmailDetail(item);
@@ -543,6 +886,12 @@ export function ReplyCenter() {
   }
 
   function openComposer(item: ReplyQueueItem, mode: ComposerMode) {
+    if (item.source === "asana_comment") {
+      openAsanaInspector(item, mode);
+      return;
+    }
+
+    setSelectedAsanaId(null);
     setExpandedId(item.id);
     setComposerState({ itemId: item.id, mode });
     setDraftErrors((current) => {
@@ -559,6 +908,7 @@ export function ReplyCenter() {
   function dismissItem(itemId: string) {
     setDismissedIds((current) => new Set(current).add(itemId));
     if (expandedId === itemId) setExpandedId(null);
+    if (selectedAsanaId === itemId) setSelectedAsanaId(null);
     if (composerState?.itemId === itemId) setComposerState(null);
   }
 
@@ -568,6 +918,7 @@ export function ReplyCenter() {
       [itemId]: Date.now() + SNOOZE_MS,
     }));
     if (expandedId === itemId) setExpandedId(null);
+    if (selectedAsanaId === itemId) setSelectedAsanaId(null);
     if (composerState?.itemId === itemId) setComposerState(null);
     addToast("Snoozed for 12 hours.", "default");
   }
@@ -640,11 +991,15 @@ export function ReplyCenter() {
         body: JSON.stringify({
           messageId: item.messageId,
           message:
-            item.source === "slack_context" ? buildSlackSummary(item) : item.message,
+            item.source === "slack_context"
+              ? buildSlackSummary(item)
+              : item.source === "asana_comment"
+                ? buildAsanaDraftContext(item, getAsanaDetail(item))
+                : item.message,
           prompt,
           channel:
             item.source === "asana_comment"
-              ? "asana comment"
+              ? "asana"
               : item.source === "slack_context"
                 ? "slack context"
                 : item.source,
@@ -671,6 +1026,81 @@ export function ReplyCenter() {
       }));
     } finally {
       setStreamingId(null);
+    }
+  }
+
+  async function handlePostAsanaComment(item: ReplyQueueItem) {
+    if (item.source !== "asana_comment" || !item.taskGid) return;
+
+    const draft = drafts[item.id]?.trim();
+    if (!draft) {
+      setDraftErrors((current) => ({
+        ...current,
+        [item.id]: "Write the comment you want to post first.",
+      }));
+      return;
+    }
+
+    setPostingAsanaId(item.id);
+    setDraftErrors((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/actions/asana-comment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          taskGid: item.taskGid,
+          text: draft,
+        }),
+      });
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        comment?: AsanaCommentEntry;
+      };
+
+      if (!res.ok || !data.comment) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const postedComment = data.comment;
+
+      const hydrated = getAsanaDetail(item);
+      setAsanaDetails((current) => ({
+        ...current,
+        [item.taskGid!]: {
+          ...(current[item.taskGid!] || hydrated || buildAsanaHydratedDetail(item, getTaskForItem(item))),
+          recent_comments: mergeRecentComments(
+            current[item.taskGid!]?.recent_comments ||
+              hydrated?.recent_comments ||
+              [],
+            postedComment
+          ),
+          synced_at: new Date().toISOString(),
+        },
+      }));
+      setDrafts((current) => ({
+        ...current,
+        [item.id]: "",
+      }));
+      addToast("Comment posted to Asana.", "success");
+      await refetchLiveData();
+    } catch (error) {
+      setDraftErrors((current) => ({
+        ...current,
+        [item.id]:
+          error instanceof Error
+            ? error.message
+            : "Unable to post the Asana comment.",
+      }));
+    } finally {
+      setPostingAsanaId(null);
     }
   }
 
@@ -908,7 +1338,11 @@ export function ReplyCenter() {
                 }
                 onClick={() => void handleAIDraft(item)}
               >
-                {streamingId === item.id ? "Drafting…" : "Create draft"}
+                {streamingId === item.id
+                  ? "Drafting…"
+                  : item.source === "asana_comment"
+                    ? "Create comment draft"
+                    : "Create draft"}
               </button>
               <button
                 className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
@@ -947,6 +1381,15 @@ export function ReplyCenter() {
               >
                 AI assist
               </button>
+              {item.source === "asana_comment" && (
+                <button
+                  className="rounded-md bg-accent-amber px-3 py-1.5 text-[11px] font-semibold text-[#0d0d0d] transition-colors hover:bg-accent-amber/90 disabled:opacity-50"
+                  disabled={!draft.trim() || postingAsanaId === item.id}
+                  onClick={() => void handlePostAsanaComment(item)}
+                >
+                  {postingAsanaId === item.id ? "Posting…" : "Post comment"}
+                </button>
+              )}
               {draft && (
                 <button
                   className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
@@ -964,7 +1407,12 @@ export function ReplyCenter() {
               )}
               {getHandoffUrl(item) && (
                 <a
-                  className="rounded-md bg-accent-amber px-3 py-1.5 text-[11px] font-semibold text-[#0d0d0d] transition-colors hover:bg-accent-amber/90"
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors",
+                    item.source === "asana_comment"
+                      ? "border border-[var(--bg-card-border)] text-text-muted hover:text-text-body"
+                      : "bg-accent-amber text-[#0d0d0d] hover:bg-accent-amber/90"
+                  )}
                   href={getHandoffUrl(item)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -985,6 +1433,261 @@ export function ReplyCenter() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  function renderAsanaInspector(item: ReplyQueueItem, mobile = false) {
+    const detail = getAsanaDetail(item);
+    const loading = item.taskGid ? asanaDetailLoading[item.taskGid] : false;
+    const error = item.taskGid ? asanaDetailErrors[item.taskGid] : "";
+    const promptText = promptTexts[item.id] || "";
+
+    return (
+      <div
+        className={cn(
+          "overflow-hidden rounded-[28px] border border-[rgba(212,164,76,0.16)] bg-[linear-gradient(180deg,rgba(19,29,42,0.96),rgba(11,16,24,0.96))] shadow-[0_32px_80px_rgba(0,0,0,0.34)]",
+          mobile ? "max-h-[85vh] overflow-y-auto" : "xl:sticky xl:top-6"
+        )}
+      >
+        <div className="border-b border-[var(--bg-card-border)] bg-[radial-gradient(circle_at_top_right,rgba(212,164,76,0.16),transparent_42%)] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-accent-amber/20 bg-accent-amber/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-amber">
+                  Asana task
+                </span>
+                {detail?.completed ? (
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                    Complete
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-200">
+                    Open
+                  </span>
+                )}
+                {loading && (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                    Syncing
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold leading-tight text-text-heading">
+                  {detail?.task_name || item.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  {detail?.project_name || item.projectName || "Tasks"} · Last activity{" "}
+                  {formatRelativeTime(
+                    detail?.recent_comments.at(-1)?.created_at || item.timestamp
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {mobile && (
+              <button
+                className="rounded-full border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                onClick={() => setSelectedAsanaId(null)}
+              >
+                Close
+              </button>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-3">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-text-muted">
+                Assignee
+              </div>
+              <div className="mt-2 text-sm text-text-body">
+                {detail?.assignee_name || "Unassigned"}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-3">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-text-muted">
+                Due
+              </div>
+              <div className="mt-2 text-sm text-text-body">
+                {formatDueLabel(detail?.task_due_on || item.taskDueOn)}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <AttentionFeedbackControl
+              target={item.attentionTarget}
+              surface="reply-center"
+              compact
+            />
+            {item.url && (
+              <a
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open in Asana
+                <ExternalLinkIcon size={11} />
+              </a>
+            )}
+            <button
+              className="rounded-md border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+              onClick={() => setComposerState({ itemId: item.id, mode: "draft" })}
+            >
+              Comment
+            </button>
+            <button
+              className="rounded-md border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+              onClick={() => setComposerState({ itemId: item.id, mode: "ai" })}
+            >
+              AI assist
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-5">
+          {error && (
+            <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
+              <div className="font-medium text-red-50">Task details could not be refreshed</div>
+              <div className="mt-1">{error}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className="rounded-md border border-red-300/20 px-3 py-1.5 text-[11px] text-red-100 transition-colors hover:text-white"
+                  onClick={() => void ensureAsanaDetail(item)}
+                >
+                  Retry
+                </button>
+                {item.url && (
+                  <a
+                    className="rounded-md border border-red-300/20 px-3 py-1.5 text-[11px] text-red-100 transition-colors hover:text-white"
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open in Asana
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-text-muted">
+                Task context
+              </div>
+              <div className="text-[11px] text-text-muted">
+                {detail?.notes ? "Live task notes" : "No task notes yet"}
+              </div>
+            </div>
+            <div className="mt-3 space-y-3">
+              {renderFormattedText(
+                detail?.notes,
+                `asana-notes-${item.id}`,
+                "text-sm leading-6 text-text-body"
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-text-muted">
+                Recent comments
+              </div>
+              <div className="text-[11px] text-text-muted">
+                {(detail?.recent_comments.length || 0) > 0
+                  ? `${detail?.recent_comments.length || 0} recent updates`
+                  : "No recent comments"}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {(detail?.recent_comments || []).length > 0 ? (
+                (detail?.recent_comments || []).map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="rounded-2xl border border-[var(--bg-card-border)] bg-[rgba(255,255,255,0.02)] p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-medium text-text-heading">
+                        {comment.author_name}
+                      </div>
+                      <div className="text-[11px] text-text-muted">
+                        {formatAbsoluteDateTime(comment.created_at)} ·{" "}
+                        {formatRelativeTime(comment.created_at)}
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {renderFormattedText(
+                        comment.text,
+                        `asana-comment-${comment.id}`,
+                        "text-sm leading-6 text-text-body"
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[var(--bg-card-border)] bg-black/10 p-4 text-sm text-text-muted">
+                  No human comments were found for this task yet.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[rgba(212,164,76,0.16)] bg-[rgba(212,164,76,0.06)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.24em] text-accent-amber">
+                  Comment assistant
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  Keep the thread moving without leaving the queue.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_PROMPTS.asana_comment.map((entry) => (
+                  <button
+                    key={`${item.id}-${entry.id}`}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[10px] transition-colors",
+                      promptText === entry.prompt
+                        ? "border-accent-amber bg-accent-amber/15 text-accent-amber"
+                        : "border-[var(--bg-card-border)] text-text-muted hover:text-text-body"
+                    )}
+                    onClick={() => {
+                      setPromptTexts((current) => ({
+                        ...current,
+                        [item.id]: entry.prompt,
+                      }));
+                      setComposerState({ itemId: item.id, mode: "ai" });
+                    }}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {renderComposer(item)}
+          </div>
+
+          <div className="flex flex-wrap gap-2 border-t border-[var(--bg-card-border)] pt-1">
+            <button
+              className="rounded-md border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+              onClick={() => snoozeItem(item.id)}
+            >
+              Snooze
+            </button>
+            <button
+              className="rounded-md border border-[var(--bg-card-border)] px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:text-accent-red"
+              onClick={() => dismissItem(item.id)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1141,221 +1844,327 @@ export function ReplyCenter() {
         ) : visibleItems.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="divide-y divide-[var(--bg-card-border)] overflow-hidden rounded-[28px] border border-[var(--bg-card-border)] bg-black/10">
-            {visibleItems.map((item, index) => {
-              const isExpanded = expandedId === item.id;
-              const isComposerOpen = composerState?.itemId === item.id;
-              const priorityPills = buildPriorityPills(item);
+          <>
+            <div
+              className={cn(
+                "grid gap-4",
+                selectedAsanaItem
+                  ? "xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.92fr)]"
+                  : ""
+              )}
+            >
+              <div className="min-w-0">
+                <div className="divide-y divide-[var(--bg-card-border)] overflow-hidden rounded-[28px] border border-[var(--bg-card-border)] bg-black/10">
+                  {visibleItems.map((item, index) => {
+                    const isExpanded =
+                      item.source !== "asana_comment" && expandedId === item.id;
+                    const isComposerOpen =
+                      item.source !== "asana_comment" &&
+                      composerState?.itemId === item.id;
+                    const isAsanaSelected =
+                      item.source === "asana_comment" &&
+                      selectedAsanaId === item.id;
+                    const priorityPills = buildPriorityPills(item);
 
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "px-4 py-4 transition-colors",
-                    isExpanded || isComposerOpen ? "bg-white/[0.03]" : "hover:bg-white/[0.02]"
-                  )}
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                    <div className="flex items-start gap-3 lg:min-w-0 lg:flex-1">
-                      <div className="pt-0.5">
-                        <ScoreBadge score={item.displayScore} />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={cn(
-                              "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                              SOURCE_STYLES[item.source]
-                            )}
-                          >
-                            {SOURCE_BADGES[item.source]}
-                          </span>
-                          {index < 3 && (
-                            <span className="rounded-md border border-accent-amber/20 bg-accent-amber/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-amber">
-                              Top queue
-                            </span>
-                          )}
-                          <span className="text-[11px] text-text-muted">{item.meta}</span>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap items-start gap-3">
-                          <button
-                            className="hot-link text-left text-base font-medium leading-tight text-text-heading"
-                            onClick={() => toggleExpanded(item)}
-                          >
-                            {item.title}
-                          </button>
-                          <span className="mt-0.5 text-xs text-text-muted">
-                            {item.sender}
-                            {item.projectName ? ` · ${item.projectName}` : ""}
-                          </span>
-                        </div>
-
-                        <p className="mt-2 max-w-4xl text-sm leading-relaxed text-text-body">
-                          {item.summary}
-                        </p>
-                        {item.priorityReasons.length > 0 && (
-                          <p className="mt-2 text-[11px] leading-relaxed text-text-muted">
-                            <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-accent-amber">
-                              Why
-                            </span>
-                            {buildPriorityReasonLine(item)}
-                          </p>
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "px-4 py-4 transition-colors",
+                          isExpanded || isComposerOpen || isAsanaSelected
+                            ? "bg-white/[0.03]"
+                            : "hover:bg-white/[0.02]"
                         )}
-                        {item.scoreBreakdown.length > 0 && (
-                          <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
-                            <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-teal-200">
-                              Score
-                            </span>
-                            {buildScoreBreakdownLine(item)}
-                          </p>
-                        )}
-                        {"attention" in item && item.attention.explanation.length > 0 && (
-                          <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
-                            <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-accent-green">
-                              Focus
-                            </span>
-                            {item.attention.explanation.join(" · ")}
-                          </p>
-                        )}
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                          <div className="flex items-start gap-3 lg:min-w-0 lg:flex-1">
+                            <div className="pt-0.5">
+                              <ScoreBadge score={item.displayScore} />
+                            </div>
 
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {priorityPills.map((pill) => (
-                            <span
-                              key={`${item.id}-${pill.label}`}
-                              className={cn(
-                                "rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em]",
-                                pill.className
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                    SOURCE_STYLES[item.source]
+                                  )}
+                                >
+                                  {SOURCE_BADGES[item.source]}
+                                </span>
+                                {index < 3 && (
+                                  <span className="rounded-md border border-accent-amber/20 bg-accent-amber/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-amber">
+                                    Top queue
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-text-muted">
+                                  {item.source === "asana_comment"
+                                    ? `${item.projectName || "Tasks"} · ${formatRelativeTime(item.timestamp)}`
+                                    : item.meta}
+                                </span>
+                              </div>
+
+                              <div className="mt-2 flex flex-wrap items-start gap-3">
+                                <button
+                                  className="hot-link text-left text-base font-medium leading-tight text-text-heading"
+                                  onClick={() =>
+                                    item.source === "asana_comment"
+                                      ? openAsanaInspector(item, "draft")
+                                      : toggleExpanded(item)
+                                  }
+                                >
+                                  {item.title}
+                                </button>
+                                <span className="mt-0.5 text-xs text-text-muted">
+                                  {item.source === "asana_comment"
+                                    ? `${item.sender} commented`
+                                    : `${item.sender}${item.projectName ? ` · ${item.projectName}` : ""}`}
+                                </span>
+                              </div>
+
+                              {item.source === "asana_comment" ? (
+                                <>
+                                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 uppercase tracking-[0.14em]">
+                                      Latest comment
+                                    </span>
+                                    <span>{formatRelativeTime(item.timestamp)}</span>
+                                    {item.taskDueOn ? (
+                                      <>
+                                        <span>·</span>
+                                        <span>{formatDueLabel(item.taskDueOn)}</span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-3 max-w-4xl line-clamp-2 text-sm leading-7 text-text-body">
+                                    {item.summary}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="mt-2 max-w-4xl text-sm leading-relaxed text-text-body">
+                                  {item.summary}
+                                </p>
                               )}
-                            >
-                              {pill.label}
-                            </span>
-                          ))}
-                          {item.tags.slice(0, 3).map((tag) => (
-                            <span
-                              key={`${item.id}-${tag}`}
-                              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-text-muted"
-                            >
-                              {titleCaseTag(tag)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2 lg:w-[320px] lg:justify-end">
-                      <AttentionFeedbackControl
-                        target={item.attentionTarget}
-                        surface="reply-center"
-                        compact
-                      />
-                      {item.source !== "slack_context" && (
-                        <button
-                          className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                          onClick={() => openComposer(item, "draft")}
-                        >
-                          {item.source === "asana_comment" ? "Draft comment" : "Draft"}
-                        </button>
-                      )}
-                      {item.source === "slack_context" ? (
-                        <button
-                          className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                          onClick={() => toggleExpanded(item)}
-                        >
-                          Summarize context
-                        </button>
-                      ) : (
-                        <button
-                          className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                          onClick={() => openComposer(item, "ai")}
-                        >
-                          AI assist
-                        </button>
-                      )}
-                      {item.url && item.source !== "email" && (
-                        <a
-                          className="inline-flex items-center gap-1 rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {handoffLabel(item, Boolean(drafts[item.id]?.trim()))}
-                          <ExternalLinkIcon size={11} />
-                        </a>
-                      )}
-                      <button
-                        className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                        onClick={() => snoozeItem(item.id)}
-                      >
-                        Snooze
-                      </button>
-                      <button
-                        className="rounded-md px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-accent-red"
-                        onClick={() => dismissItem(item.id)}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
+                              {item.priorityReasons.length > 0 && (
+                                <p className="mt-2 text-[11px] leading-relaxed text-text-muted">
+                                  <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-accent-amber">
+                                    Why
+                                  </span>
+                                  {buildPriorityReasonLine(item)}
+                                </p>
+                              )}
+                              {item.scoreBreakdown.length > 0 && (
+                                <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                                  <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-teal-200">
+                                    Score
+                                  </span>
+                                  {buildScoreBreakdownLine(item)}
+                                </p>
+                              )}
+                              {"attention" in item &&
+                                item.attention.explanation.length > 0 && (
+                                  <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                                    <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-accent-green">
+                                      Focus
+                                    </span>
+                                    {item.attention.explanation.join(" · ")}
+                                  </p>
+                                )}
 
-                  {(isExpanded || isComposerOpen) && (
-                    <div className="mt-4 rounded-[24px] border border-[var(--bg-card-border)] bg-[var(--tab-bg)] p-4">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-[10px] uppercase tracking-[0.24em] text-text-muted">
-                          {item.source === "email"
-                            ? "Full message"
-                            : item.source === "asana_comment"
-                              ? "Latest comment"
-                              : item.source === "slack_context"
-                                ? "Thread context"
-                                : "Conversation context"}
-                        </div>
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {priorityPills.map((pill) => (
+                                  <span
+                                    key={`${item.id}-${pill.label}`}
+                                    className={cn(
+                                      "rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em]",
+                                      pill.className
+                                    )}
+                                  >
+                                    {pill.label}
+                                  </span>
+                                ))}
+                                {item.tags.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={`${item.id}-${tag}`}
+                                    className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-text-muted"
+                                  >
+                                    {titleCaseTag(tag)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
 
-                        {item.source !== "slack_context" && !isComposerOpen && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {QUICK_PROMPTS[item.source].map((entry) => (
+                          {item.source === "asana_comment" ? (
+                            <div className="flex flex-wrap gap-2 lg:w-[320px] lg:justify-end">
+                              <AttentionFeedbackControl
+                                target={item.attentionTarget}
+                                surface="reply-center"
+                                compact
+                              />
                               <button
-                                key={entry.id}
-                                className="rounded-full border border-[var(--bg-card-border)] px-2.5 py-1 text-[10px] text-text-muted transition-colors hover:text-text-body"
-                                onClick={() => applyQuickPrompt(item, entry.prompt)}
+                                className="rounded-md bg-accent-amber px-3 py-1.5 text-[11px] font-semibold text-[#0d0d0d] transition-colors hover:bg-accent-amber/90"
+                                onClick={() => openAsanaInspector(item, "draft")}
                               >
-                                {entry.label}
+                                Comment
                               </button>
-                            ))}
+                              <button
+                                className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                onClick={() => openAsanaInspector(item, "ai")}
+                              >
+                                AI assist
+                              </button>
+                              {item.url && (
+                                <a
+                                  className="inline-flex items-center gap-1 rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Open in Asana
+                                  <ExternalLinkIcon size={11} />
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2 lg:w-[320px] lg:justify-end">
+                              <AttentionFeedbackControl
+                                target={item.attentionTarget}
+                                surface="reply-center"
+                                compact
+                              />
+                              {item.source !== "slack_context" && (
+                                <button
+                                  className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                  onClick={() => openComposer(item, "draft")}
+                                >
+                                  Draft
+                                </button>
+                              )}
+                              {item.source === "slack_context" ? (
+                                <button
+                                  className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                  onClick={() => toggleExpanded(item)}
+                                >
+                                  Summarize context
+                                </button>
+                              ) : (
+                                <button
+                                  className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                  onClick={() => openComposer(item, "ai")}
+                                >
+                                  AI assist
+                                </button>
+                              )}
+                              {item.url && item.source !== "email" && (
+                                <a
+                                  className="inline-flex items-center gap-1 rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {handoffLabel(item, Boolean(drafts[item.id]?.trim()))}
+                                  <ExternalLinkIcon size={11} />
+                                </a>
+                              )}
+                              <button
+                                className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                onClick={() => snoozeItem(item.id)}
+                              >
+                                Snooze
+                              </button>
+                              <button
+                                className="rounded-md px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-accent-red"
+                                onClick={() => dismissItem(item.id)}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {(isExpanded || isComposerOpen) && (
+                          <div className="mt-4 rounded-[24px] border border-[var(--bg-card-border)] bg-[var(--tab-bg)] p-4">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                              <div className="text-[10px] uppercase tracking-[0.24em] text-text-muted">
+                                {item.source === "email"
+                                  ? "Full message"
+                                  : item.source === "slack_context"
+                                    ? "Thread context"
+                                    : "Conversation context"}
+                              </div>
+
+                              {item.source !== "slack_context" && !isComposerOpen && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {QUICK_PROMPTS[item.source].map((entry) => (
+                                    <button
+                                      key={entry.id}
+                                      className="rounded-full border border-[var(--bg-card-border)] px-2.5 py-1 text-[10px] text-text-muted transition-colors hover:text-text-body"
+                                      onClick={() => applyQuickPrompt(item, entry.prompt)}
+                                    >
+                                      {entry.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {item.priorityReasons.length > 0 && (
+                              <div className="mb-4 rounded-xl border border-[var(--bg-card-border)] bg-black/10 px-3 py-2 text-[11px] text-text-muted">
+                                <span className="mr-2 uppercase tracking-[0.18em] text-[10px] text-accent-amber">
+                                  Why this is high
+                                </span>
+                                {buildPriorityReasonLine(item)}
+                              </div>
+                            )}
+                            {item.scoreBreakdown.length > 0 && (
+                              <div className="mb-4 rounded-xl border border-[var(--bg-card-border)] bg-black/10 px-3 py-2 text-[11px] text-text-muted">
+                                <span className="mr-2 uppercase tracking-[0.18em] text-[10px] text-teal-200">
+                                  Score recipe
+                                </span>
+                                {item.scoreBreakdown.map((entry) => (
+                                  <span
+                                    key={`${item.id}-${entry.key}`}
+                                    className="mr-3 inline-flex"
+                                  >
+                                    {entry.label} +{entry.points}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {renderContext(item)}
+                            {renderComposer(item)}
                           </div>
                         )}
                       </div>
-
-                      {item.priorityReasons.length > 0 && (
-                        <div className="mb-4 rounded-xl border border-[var(--bg-card-border)] bg-black/10 px-3 py-2 text-[11px] text-text-muted">
-                          <span className="mr-2 uppercase tracking-[0.18em] text-[10px] text-accent-amber">
-                            Why this is high
-                          </span>
-                          {buildPriorityReasonLine(item)}
-                        </div>
-                      )}
-                      {item.scoreBreakdown.length > 0 && (
-                        <div className="mb-4 rounded-xl border border-[var(--bg-card-border)] bg-black/10 px-3 py-2 text-[11px] text-text-muted">
-                          <span className="mr-2 uppercase tracking-[0.18em] text-[10px] text-teal-200">
-                            Score recipe
-                          </span>
-                          {item.scoreBreakdown.map((entry) => (
-                            <span key={`${item.id}-${entry.key}`} className="mr-3 inline-flex">
-                              {entry.label} +{entry.points}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {renderContext(item)}
-                      {renderComposer(item)}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+
+              {selectedAsanaItem && (
+                <div className="hidden xl:block">
+                  {renderAsanaInspector(selectedAsanaItem)}
+                </div>
+              )}
+            </div>
+
+            {selectedAsanaItem && (
+              <div
+                className="fixed inset-0 z-50 bg-black/70 p-4 backdrop-blur-sm xl:hidden"
+                onClick={() => setSelectedAsanaId(null)}
+              >
+                <div
+                  className="mx-auto flex h-full max-w-2xl items-center"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {renderAsanaInspector(selectedAsanaItem, true)}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>

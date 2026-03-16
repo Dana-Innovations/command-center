@@ -1,4 +1,5 @@
 import type { Person, TouchpointItem } from "@/hooks/usePeople";
+import type { AttentionPersonPreference } from "@/lib/attention/people";
 import type { SalesforceOpportunity } from "@/lib/types";
 import type { PersonDetailResponse } from "@/hooks/usePersonDetail";
 
@@ -14,6 +15,7 @@ export interface UnifiedContact extends Person {
   lastChannel: TouchpointItem["ch"] | null;
   lastInteractionDate: string | null;
   relatedOpps: SalesforceOpportunity[];
+  attentionPreference: AttentionPersonPreference | null;
 }
 
 // ── Styling Constants ─────────────────────────────────────────────────────
