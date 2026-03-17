@@ -55,9 +55,13 @@ const SEVERITY_DOTS: Record<string, string> = {
 
 interface MorningBriefProps {
   onOpenCalendarPrep: (eventId?: string) => void;
+  showPendingState?: boolean;
 }
 
-export function MorningBrief({ onOpenCalendarPrep }: MorningBriefProps) {
+export function MorningBrief({
+  onOpenCalendarPrep,
+  showPendingState = false,
+}: MorningBriefProps) {
   const { brief, status, error, originalTargets, refresh } = useMorningBrief();
   const [collapsed, setCollapsed] = useState(() => getStoredBoolean(COLLAPSE_KEY, false));
   const [changesExpanded, setChangesExpanded] = useState(() =>
@@ -83,6 +87,29 @@ export function MorningBrief({ onOpenCalendarPrep }: MorningBriefProps) {
       /* ignore */
     }
   };
+
+  if (status === "idle" && showPendingState) {
+    return (
+      <section
+        className="glass-card anim-card overflow-hidden"
+        style={{ animationDelay: "0ms" }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,163,225,0.14),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(200,155,60,0.10),transparent_36%)]" />
+        <div className="relative">
+          <div className="text-[11px] uppercase tracking-[0.28em] text-accent-amber">
+            Live Brief
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-heading">
+            Building your brief from newly connected Microsoft 365 data.
+          </p>
+          <p className="mt-3 text-sm text-text-muted">
+            Real email, calendar, and Teams activity is syncing now. Your brief
+            will appear here as soon as the first pass completes.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   // Don't render anything if idle with no data yet
   if (status === "idle") return null;

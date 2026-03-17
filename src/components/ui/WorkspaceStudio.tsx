@@ -377,10 +377,12 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
     profileLoading,
     focusMapLoading,
     servicesLoading,
+    connectingService,
     setupTab,
     setSetupTab,
     refreshFocusMap,
     refreshServices,
+    connectService,
     ensureTeamChannels,
     setNodeImportance,
     refreshProfile,
@@ -393,7 +395,6 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
     AttentionProvider | ""
   >("");
   const [pendingNodeId, setPendingNodeId] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState<string | null>(null);
   const [focusActionError, setFocusActionError] = useState<string | null>(null);
   const [teamRetryNodeId, setTeamRetryNodeId] = useState<string | null>(null);
 
@@ -496,59 +497,9 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
 
   const handleConnect = useCallback(
     async (provider: string) => {
-      setConnecting(provider);
-      try {
-        const response = await fetch("/api/connections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider }),
-        });
-        if (!response.ok) {
-          setConnecting(null);
-          addToast("Failed to start the connection flow.", "error");
-          return;
-        }
-        const data = (await response.json()) as { authorization_url?: string };
-        if (!data.authorization_url) {
-          setConnecting(null);
-          addToast("No authorization URL was returned for this connection.", "error");
-          return;
-        }
-
-        const popup = window.open(
-          data.authorization_url,
-          "cortex-connect",
-          "width=640,height=760,popup=yes"
-        );
-        if (!popup) {
-          setConnecting(null);
-          addToast("The browser blocked the connection popup.", "error");
-          return;
-        }
-
-        const interval = window.setInterval(async () => {
-          if (popup?.closed) {
-            window.clearInterval(interval);
-            setConnecting(null);
-            await Promise.all([refreshServices(), refreshFocusMap()]);
-          }
-        }, 1200);
-
-        window.setTimeout(() => {
-          window.clearInterval(interval);
-          setConnecting(null);
-        }, 300000);
-      } catch (error) {
-        addToast(
-          error instanceof Error
-            ? error.message
-            : "Failed to start the connection flow.",
-          "error"
-        );
-        setConnecting(null);
-      }
+      await connectService(provider);
     },
-    [addToast, refreshFocusMap, refreshServices]
+    [connectService]
   );
 
   const handleSelectNode = useCallback(
@@ -635,7 +586,7 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <div className="text-[11px] uppercase tracking-[0.28em] text-accent-amber">
-              Setup & Focus
+              Personalization
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold leading-tight text-text-heading">
               Shape what rises, fades, and gets your attention first.
@@ -653,7 +604,7 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
               </Button>
             )}
             <Button variant="primary" size="sm" onClick={() => void completeOnboarding()}>
-              Finish setup
+              Done
             </Button>
           </div>
         </div>
@@ -775,10 +726,12 @@ export function SetupFocusView({ onBack }: SetupFocusViewProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={connecting === service.provider}
+                        disabled={connectingService === service.provider}
                         onClick={() => void handleConnect(service.provider)}
                       >
-                        {connecting === service.provider ? "Connecting..." : "Connect"}
+                        {connectingService === service.provider
+                          ? "Connecting..."
+                          : "Connect"}
                       </Button>
                     )}
                   </div>

@@ -298,33 +298,3 @@ export function resolveAttentionPersonPreferenceForTarget(
     actorKeys: target.actorKeys,
   });
 }
-
-export function getSeededAttentionPeopleForUser(
-  email: string | null | undefined
-) {
-  const normalizedEmail = normalizePersonEmail(email);
-  if (normalizedEmail !== "ari@sonance.com") {
-    return [];
-  }
-
-  return [
-    {
-      id: buildAttentionPersonPreferenceId({ name: "Jeana Ceglia" }),
-      name: "Jeana Ceglia",
-      email: null,
-      aliases: ["Jeana"],
-      pinned: true,
-      important: true,
-      source: "seeded" as const,
-    },
-    {
-      id: buildAttentionPersonPreferenceId({ name: "Scott Struthers" }),
-      name: "Scott Struthers",
-      email: null,
-      aliases: ["Scott"],
-      pinned: true,
-      important: true,
-      source: "seeded" as const,
-    },
-  ];
-}

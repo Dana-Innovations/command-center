@@ -6,14 +6,24 @@ interface SurfaceConnectStateProps {
   title: string;
   description: string;
   services: string[];
-  onOpenSetup?: () => void;
+  outcomes?: string[];
+  primaryActionLabel?: string;
+  primaryActionDisabled?: boolean;
+  onPrimaryAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
 export function SurfaceConnectState({
   title,
   description,
   services,
-  onOpenSetup,
+  outcomes = [],
+  primaryActionLabel,
+  primaryActionDisabled = false,
+  onPrimaryAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: SurfaceConnectStateProps) {
   return (
     <section className="glass-card anim-card text-center" style={{ animationDelay: "120ms" }}>
@@ -37,11 +47,35 @@ export function SurfaceConnectState({
           </span>
         ))}
       </div>
-      {onOpenSetup && (
-        <div className="mt-5">
-          <Button variant="primary" size="sm" onClick={onOpenSetup}>
-            Open Setup & Focus
-          </Button>
+      {outcomes.length > 0 && (
+        <div className="mx-auto mt-5 grid max-w-3xl gap-2 text-left md:grid-cols-2">
+          {outcomes.map((outcome) => (
+            <div
+              key={outcome}
+              className="rounded-2xl border border-[var(--bg-card-border)] bg-white/[0.03] px-4 py-3 text-sm text-text-body"
+            >
+              {outcome}
+            </div>
+          ))}
+        </div>
+      )}
+      {(onPrimaryAction || onSecondaryAction) && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {onPrimaryAction && primaryActionLabel && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={primaryActionDisabled}
+              onClick={onPrimaryAction}
+            >
+              {primaryActionLabel}
+            </Button>
+          )}
+          {onSecondaryAction && secondaryActionLabel && (
+            <Button variant="ghost" size="sm" onClick={onSecondaryAction}>
+              {secondaryActionLabel}
+            </Button>
+          )}
         </div>
       )}
     </section>

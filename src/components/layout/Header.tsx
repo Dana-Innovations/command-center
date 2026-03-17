@@ -95,9 +95,9 @@ export function Header({
             variant="ghost"
             size="sm"
             onClick={() => onOpenSetup?.()}
-            title="Open Setup & Focus"
+            title="Open personalization"
           >
-            Setup & Focus
+            Personalize
           </Button>
 
           <Button

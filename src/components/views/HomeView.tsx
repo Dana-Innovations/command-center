@@ -73,6 +73,44 @@ type CommunicationCardItem =
     };
 
 const urgencyOrder = { red: 0, amber: 1, teal: 2, gray: 3 };
+const M365_WIN_CARDS = [
+  {
+    title: "Morning brief",
+    description: "AI summary from your live email, meetings, and work.",
+  },
+  {
+    title: "Ranked replies",
+    description: "The most important threads rise first from your own inbox.",
+  },
+  {
+    title: "Calendar prep",
+    description: "Meeting context and next actions before the day gets busy.",
+  },
+  {
+    title: "Teams context",
+    description: "Chats and channel signals alongside the rest of your day.",
+  },
+] as const;
+
+function getPreferredLiveTab(
+  connectedServices: Array<{ provider: string }>
+): { tab: TabId; label: string } | null {
+  for (const service of connectedServices) {
+    if (service.provider === "asana" || service.provider === "monday") {
+      return { tab: "operations", label: "Open Operations" };
+    }
+
+    if (service.provider === "slack") {
+      return { tab: "communications", label: "Open Comms" };
+    }
+
+    if (service.provider === "salesforce" || service.provider === "powerbi") {
+      return { tab: "performance", label: "Open Performance" };
+    }
+  }
+
+  return null;
+}
 
 function formatTime(value: string) {
   return new Date(value).toLocaleTimeString("en-US", {
@@ -132,12 +170,18 @@ interface HomeViewProps {
   onNavigate: (tab: TabId) => void;
   onOpenCalendarPrep: (eventId?: string) => void;
   onOpenSetup: (tab?: SetupFocusTab) => void;
+  onConnectService: (provider: string) => Promise<void>;
+  recentlyConnectedProvider?: string | null;
+  isSyncingLiveData?: boolean;
 }
 
 export function HomeView({
   onNavigate,
   onOpenCalendarPrep,
   onOpenSetup,
+  onConnectService,
+  recentlyConnectedProvider = null,
+  isSyncingLiveData = false,
 }: HomeViewProps) {
   const { emails } = useEmails();
   const { chats } = useChats();
@@ -149,15 +193,19 @@ export function HomeView({
   const { openOpps } = useSalesforce();
   const { orders, connected: mondayConnected } = useMonday();
   const {
-    profile,
     services,
-    onboardingCompleted,
+    connectingService,
     applyTarget,
     getPersonPreference,
   } = useAttention();
 
   const connectedServices = services.filter((service) => service.connected);
-  const focusRules = profile?.focusPreferences ?? [];
+  const connectedServiceLabels = connectedServices.map((service) => service.label);
+  const hasAnyService = connectedServices.length > 0;
+  const hasM365 = connectedServices.some(
+    (service) => service.provider === "microsoft"
+  );
+  const preferredLiveTab = getPreferredLiveTab(connectedServices);
 
   const todayEvents = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA", {
@@ -324,87 +372,205 @@ export function HomeView({
       .slice(0, 6);
   }, [applyTarget, chats, comments, emails, slackMessages]);
 
-  const homeStats = useMemo(
-    () => [
-      { label: "Connected", value: connectedServices.length },
-      { label: "Focused rules", value: focusRules.length },
-      { label: "Replies", value: emails.filter((email) => email.needs_reply).length },
-      { label: "Meetings today", value: todayEvents.length },
-    ],
-    [connectedServices.length, emails, focusRules.length, todayEvents.length]
-  );
+  const homeStats = [
+    { label: "Connected", value: connectedServices.length },
+    { label: "Replies", value: emails.filter((email) => email.needs_reply).length },
+    { label: "Meetings today", value: todayEvents.length },
+    { label: "Priority tasks", value: priorityTasks.length },
+  ];
 
-  const focusPreview = focusRules
-    .filter((rule) => rule.importance !== "muted")
-    .slice(0, 4);
+  if (!hasAnyService) {
+    return (
+      <div className="space-y-5">
+        <section
+          className="glass-card anim-card overflow-hidden"
+          style={{ animationDelay: "0ms" }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(0,163,225,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(0,178,169,0.12),transparent_32%)]" />
+          <div className="relative grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.28em] text-accent-amber">
+                Real-Data Start
+              </div>
+              <h1 className="mt-3 font-display text-3xl font-semibold leading-tight text-text-heading">
+                Connect Microsoft 365 to light up your command center.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">
+                It is the fastest way to unlock a live morning brief, ranked
+                replies, calendar prep, and Teams context from your own account.
+                Nothing here is mocked or prefilled.
+              </p>
+
+              <div className="mt-5">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={connectingService === "microsoft"}
+                  onClick={() => void onConnectService("microsoft")}
+                >
+                  {connectingService === "microsoft"
+                    ? "Connecting Microsoft 365..."
+                    : "Connect Microsoft 365"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {M365_WIN_CARDS.map((card) => (
+                <div
+                  key={card.title}
+                  className="rounded-[22px] border border-[var(--bg-card-border)] bg-black/10 p-4"
+                >
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-accent-teal">
+                    Unlocks
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-text-heading">
+                    {card.title}
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                    {card.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <MorningBrief onOpenCalendarPrep={onOpenCalendarPrep} />
+      <MorningBrief
+        onOpenCalendarPrep={onOpenCalendarPrep}
+        showPendingState={
+          recentlyConnectedProvider === "microsoft" && isSyncingLiveData
+        }
+      />
 
       <section className="glass-card anim-card overflow-hidden" style={{ animationDelay: "0ms" }}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(0,163,225,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(0,178,169,0.12),transparent_32%)]" />
         <div className="relative grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
           <div>
             <div className="text-[11px] uppercase tracking-[0.28em] text-accent-amber">
-              Setup & Focus
+              {hasM365 ? "Command Center" : "Next Best Connection"}
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold leading-tight text-text-heading">
-              {onboardingCompleted
-                ? "Your command center is focused and ready."
-                : "Finish setup before the dashboard tries to do too much."}
+              {hasM365
+                ? "Start with the highest-signal work from today."
+                : "You already have live data here. Connect Microsoft 365 next for the biggest lift."}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">
-              {onboardingCompleted
-                ? "You can adjust services and focus rules any time from here. The rest of Home stays intentionally high level."
-                : "Connect the systems you care about and set structural focus once so Home, Comms, and Calendar know what should rise first."}
+              {hasM365
+                ? "Your brief, communications, and calendar can lead the day now. Personalization is available when you want it, not before."
+                : "Microsoft 365 adds the morning brief, ranked replies, calendar prep, and Teams context on top of the real signals you already connected."}
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {focusPreview.length > 0 ? (
-                focusPreview.map((rule) => (
-                  <span
-                    key={`${rule.provider}-${rule.entity_type}-${rule.entity_id}`}
-                    className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-3 py-1 text-[11px] text-text-body"
-                  >
-                    {rule.label_snapshot || rule.entity_id}
-                  </span>
-                ))
-              ) : (
-                <span className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-3 py-1 text-[11px] text-text-muted">
-                  No focus rules saved yet
+              {connectedServiceLabels.map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-[var(--bg-card-border)] bg-white/[0.04] px-3 py-1 text-[11px] text-text-body"
+                >
+                  {label}
                 </span>
-              )}
+              ))}
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button variant="primary" size="sm" onClick={() => onOpenSetup("focus")}>
-                {onboardingCompleted ? "Edit focus" : "Continue setup"}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => onOpenSetup("connections")}>
-                Manage services
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate("communications")}>
-                Open Comms
-              </Button>
+              {hasM365 ? (
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => onNavigate("communications")}
+                  >
+                    Open Comms
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onNavigate("calendar")}
+                  >
+                    View Calendar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onOpenSetup("focus")}
+                  >
+                    Personalize
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={connectingService === "microsoft"}
+                    onClick={() => void onConnectService("microsoft")}
+                  >
+                    {connectingService === "microsoft"
+                      ? "Connecting Microsoft 365..."
+                      : "Connect Microsoft 365"}
+                  </Button>
+                  {preferredLiveTab && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onNavigate(preferredLiveTab.tab)}
+                    >
+                      {preferredLiveTab.label}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onOpenSetup("focus")}
+                  >
+                    Personalize
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-            {homeStats.map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-[22px] border border-[var(--bg-card-border)] bg-black/10 p-4"
-              >
-                <div className="text-[10px] uppercase tracking-[0.22em] text-text-muted">
-                  {stat.label}
+          {hasM365 ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+              {homeStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-[22px] border border-[var(--bg-card-border)] bg-black/10 p-4"
+                >
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-text-muted">
+                    {stat.label}
+                  </div>
+                  <div className="mt-2 text-3xl font-semibold tabular-nums text-text-heading">
+                    {stat.value}
+                  </div>
                 </div>
-                <div className="mt-2 text-3xl font-semibold tabular-nums text-text-heading">
-                  {stat.value}
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+              {M365_WIN_CARDS.map((card) => (
+                <div
+                  key={card.title}
+                  className="rounded-[22px] border border-[var(--bg-card-border)] bg-black/10 p-4"
+                >
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-accent-teal">
+                    Next unlock
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-text-heading">
+                    {card.title}
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                    {card.description}
+                  </p>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

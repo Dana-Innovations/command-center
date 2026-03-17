@@ -57,8 +57,11 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const [eodOpen, setEodOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [recentlyConnectedProvider, setRecentlyConnectedProvider] = useState<
+    string | null
+  >(null);
   const { loading, fetchedAt, error, refetch } = useLiveData();
-  const { focusRevision, openSetupFocus } = useAttention();
+  const { focusRevision, openSetupFocus, connectService } = useAttention();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
   const calendarSubView: CalendarSubView = parseCalendarSubView(
@@ -190,6 +193,27 @@ function HomeContent() {
     [syncUrl]
   );
 
+  const handleConnectService = useCallback(
+    async (provider: string) => {
+      const connected = await connectService(provider);
+      if (!connected) return;
+
+      syncUrl({ tab: "home", sub: "overview" });
+      if (provider !== "microsoft") {
+        await refetch();
+        return;
+      }
+
+      setRecentlyConnectedProvider(provider);
+      try {
+        await refetch();
+      } finally {
+        setRecentlyConnectedProvider(null);
+      }
+    },
+    [connectService, refetch, syncUrl]
+  );
+
   const handleCalendarSubViewChange = useCallback(
     (subView: CalendarSubView) => {
       if (activeTab === "calendar") {
@@ -230,16 +254,29 @@ function HomeContent() {
           onNavigate={navigateToTab}
           onOpenCalendarPrep={openCalendarPrep}
           onOpenSetup={openSetup}
+          onConnectService={handleConnectService}
+          recentlyConnectedProvider={recentlyConnectedProvider}
+          isSyncingLiveData={loading}
         />
       );
     }
 
     if (activeTab === "communications") {
-      return <CommunicationsView onOpenSetup={() => openSetup("focus")} />;
+      return (
+        <CommunicationsView
+          onConnectService={handleConnectService}
+          onOpenSetup={() => openSetup("focus")}
+        />
+      );
     }
 
     if (activeTab === "people") {
-      return <PeopleHubView onOpenSetup={() => openSetup("focus")} />;
+      return (
+        <PeopleHubView
+          onConnectService={handleConnectService}
+          onOpenSetup={() => openSetup("focus")}
+        />
+      );
     }
 
     if (activeTab === "calendar") {
@@ -247,6 +284,7 @@ function HomeContent() {
         <CalendarHubView
           activeSubView={calendarSubView}
           initialEventId={prepEventId}
+          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
           onSubViewChange={handleCalendarSubViewChange}
         />
@@ -257,6 +295,7 @@ function HomeContent() {
       return (
         <PerformanceView
           activeSubView={performanceSubView}
+          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("connections")}
           onSubViewChange={handlePerformanceSubViewChange}
         />
@@ -266,6 +305,7 @@ function HomeContent() {
     return (
       <OperationsView
         activeSubView={operationsSubView}
+        onConnectService={handleConnectService}
         onOpenSetup={() => openSetup("connections")}
         onSubViewChange={handleOperationsSubViewChange}
       />
@@ -274,9 +314,11 @@ function HomeContent() {
     activeTab,
     calendarSubView,
     handleCalendarSubViewChange,
+    handleConnectService,
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
     homeSubView,
+    loading,
     navigateToTab,
     openCalendarPrep,
     openHomeOverview,
@@ -284,6 +326,7 @@ function HomeContent() {
     operationsSubView,
     performanceSubView,
     prepEventId,
+    recentlyConnectedProvider,
   ]);
 
   return (

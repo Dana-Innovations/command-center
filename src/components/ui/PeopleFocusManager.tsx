@@ -3,14 +3,12 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
 import { usePeople } from "@/hooks/usePeople";
 import { useAttention } from "@/lib/attention/client";
 import type { AttentionPersonPreference } from "@/lib/attention/people";
 import {
   buildAttentionPersonPreferenceId,
   getAttentionPersonRankingWeight,
-  getSeededAttentionPeopleForUser,
   normalizePersonEmail,
   normalizePersonLabel,
 } from "@/lib/attention/people";
@@ -22,7 +20,6 @@ interface SuggestedPerson {
   key: string;
   preference: AttentionPersonPreference;
   reason: string;
-  starter?: boolean;
 }
 
 const URGENCY_WEIGHT = {
@@ -82,7 +79,6 @@ function buildSuggestedPreference(
 }
 
 export function PeopleFocusManager() {
-  const { user } = useAuth();
   const { people, loading } = usePeople();
   const { addToast } = useToast();
   const {
@@ -99,15 +95,6 @@ export function PeopleFocusManager() {
   const importantCount = peoplePreferences.filter((person) => person.important).length;
 
   const suggestions = useMemo(() => {
-    const seededSuggestions = getSeededAttentionPeopleForUser(user?.email).map(
-      (preference) => ({
-        key: `seeded:${preference.id}`,
-        preference,
-        reason: "Starter for Ari",
-        starter: true,
-      })
-    );
-
     const minedSuggestions = [...people]
       .filter(
         (person) =>
@@ -130,18 +117,9 @@ export function PeopleFocusManager() {
         } · ${person.action}`,
       }));
 
-    const combined = [...seededSuggestions, ...minedSuggestions].filter(
-      (suggestion) =>
-        !getPersonPreference({
-          name: suggestion.preference.name,
-          email: suggestion.preference.email,
-          aliases: suggestion.preference.aliases,
-        })
-    );
-
     const query = draft.trim().toLowerCase();
     const filtered = query
-      ? combined.filter((suggestion) => {
+      ? minedSuggestions.filter((suggestion) => {
           const searchable = [
             suggestion.preference.name,
             suggestion.preference.email ?? "",
@@ -151,17 +129,24 @@ export function PeopleFocusManager() {
             .toLowerCase();
           return searchable.includes(query);
         })
-      : combined;
+      : minedSuggestions;
 
     const unique = new Map<string, SuggestedPerson>();
     for (const suggestion of filtered) {
-      if (!unique.has(suggestion.preference.id)) {
+      if (
+        !unique.has(suggestion.preference.id) &&
+        !getPersonPreference({
+          name: suggestion.preference.name,
+          email: suggestion.preference.email,
+          aliases: suggestion.preference.aliases,
+        })
+      ) {
         unique.set(suggestion.preference.id, suggestion);
       }
     }
 
     return Array.from(unique.values()).slice(0, 10);
-  }, [draft, getPersonPreference, people, user?.email]);
+  }, [draft, getPersonPreference, people]);
 
   const handleAdd = async (mode: AddMode) => {
     const preference = buildPreferenceFromDraft(draft, mode);
@@ -429,12 +414,7 @@ export function PeopleFocusManager() {
               suggestions.map((suggestion) => (
                 <div
                   key={suggestion.key}
-                  className={cn(
-                    "rounded-2xl border p-3",
-                    suggestion.starter
-                      ? "border-accent-teal/25 bg-accent-teal/10"
-                      : "border-[var(--bg-card-border)] bg-black/10"
-                  )}
+                  className="rounded-2xl border border-[var(--bg-card-border)] bg-black/10 p-3"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
@@ -442,11 +422,6 @@ export function PeopleFocusManager() {
                         <div className="text-sm font-medium text-text-heading">
                           {suggestion.preference.name}
                         </div>
-                        {suggestion.starter && (
-                          <span className="rounded-full border border-accent-teal/25 bg-accent-teal/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-accent-teal">
-                            Starter
-                          </span>
-                        )}
                       </div>
                       <div className="mt-1 text-xs text-text-muted">
                         {suggestion.preference.email || suggestion.reason}

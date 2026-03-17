@@ -3,16 +3,22 @@
 import { ReplyCenter } from "@/components/command-center/ReplyCenter";
 import { Button } from "@/components/ui/button";
 import { useConnections } from "@/hooks/useConnections";
+import { useAttention } from "@/lib/attention/client";
 import { SurfaceIntro } from "@/components/views/SurfaceChrome";
 import { SurfaceConnectState } from "@/components/views/SurfaceConnectState";
 import { SignalsView } from "@/components/views/SignalsView";
 
 interface CommunicationsViewProps {
   onOpenSetup?: () => void;
+  onConnectService: (provider: string) => Promise<void>;
 }
 
-export function CommunicationsView({ onOpenSetup }: CommunicationsViewProps) {
+export function CommunicationsView({
+  onConnectService,
+  onOpenSetup,
+}: CommunicationsViewProps) {
   const connections = useConnections();
+  const { connectingService } = useAttention();
   const connected = connections.m365 || connections.slack || connections.asana;
 
   return (
@@ -24,7 +30,7 @@ export function CommunicationsView({ onOpenSetup }: CommunicationsViewProps) {
         actions={
           onOpenSetup ? (
             <Button variant="secondary" size="sm" onClick={onOpenSetup}>
-              Setup & Focus
+              Personalize
             </Button>
           ) : undefined
         }
@@ -33,9 +39,22 @@ export function CommunicationsView({ onOpenSetup }: CommunicationsViewProps) {
       {!connected ? (
         <SurfaceConnectState
           title="Connect communications data"
-          description="Connect Microsoft 365, Slack, or Asana so the command center can build your reply queue and channel activity."
+          description="Microsoft 365 is the fastest unlock here. It brings in live replies, Teams activity, and the core signals that shape the rest of the queue."
           services={["Microsoft 365", "Slack", "Asana"]}
-          onOpenSetup={onOpenSetup}
+          outcomes={[
+            "Ranked replies from your real inbox",
+            "Teams and channel context tied to the same day",
+            "A stronger morning brief from your own communication load",
+          ]}
+          primaryActionLabel={
+            connectingService === "microsoft"
+              ? "Connecting Microsoft 365..."
+              : "Connect Microsoft 365"
+          }
+          primaryActionDisabled={connectingService === "microsoft"}
+          onPrimaryAction={() => void onConnectService("microsoft")}
+          secondaryActionLabel={onOpenSetup ? "Personalize" : undefined}
+          onSecondaryAction={onOpenSetup}
         />
       ) : (
         <>

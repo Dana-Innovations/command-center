@@ -29,7 +29,6 @@ import type { SetupFocusTab } from "@/lib/tab-config";
 import {
   buildAttentionPeopleDashboardValue,
   getAttentionPersonPreferences,
-  getSeededAttentionPeopleForUser,
   matchAttentionPersonPreference,
   removeAttentionPersonPreference,
   upsertAttentionPersonPreference,
@@ -39,6 +38,7 @@ import {
   mergeReplyPriorityPreferences,
   type ReplyPriorityPreferences,
 } from "@/lib/reply-center";
+import { useToast } from "@/components/ui/toast";
 
 interface ServiceStatus {
   provider: string;
@@ -63,6 +63,7 @@ interface AttentionContextValue {
   profile: AttentionProfile | null;
   focusProviders: FocusNode[];
   services: ServiceStatus[];
+  connectingService: string | null;
   focusMapWarnings: FocusMapWarning[];
   focusMapError: FocusMapErrorState | null;
   profileError: string | null;
@@ -81,7 +82,8 @@ interface AttentionContextValue {
     provider?: AttentionProvider;
     teamId?: string;
   }) => Promise<FocusMapRefreshResult>;
-  refreshServices: () => Promise<void>;
+  refreshServices: () => Promise<ServiceStatus[]>;
+  connectService: (provider: string) => Promise<boolean>;
   ensureTeamChannels: (teamId: string) => Promise<FocusMapRefreshResult>;
   setNodeImportance: (node: FocusNode, importance: ImportanceTier) => Promise<void>;
   completeOnboarding: () => Promise<void>;
@@ -175,9 +177,11 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> 
 
 export function AttentionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [profile, setProfile] = useState<AttentionProfile | null>(null);
   const [focusProviders, setFocusProviders] = useState<FocusNode[]>([]);
   const [services, setServices] = useState<ServiceStatus[]>([]);
+  const [connectingService, setConnectingService] = useState<string | null>(null);
   const [focusMapWarnings, setFocusMapWarnings] = useState<FocusMapWarning[]>([]);
   const [focusMapError, setFocusMapError] = useState<FocusMapErrorState | null>(
     null
@@ -189,7 +193,6 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   const [setupTab, setSetupTab] = useState<SetupFocusTab>("focus");
   const [focusRevision, setFocusRevision] = useState(0);
   const migratedLegacyRef = useRef(false);
-  const seededPeopleRef = useRef(false);
 
   const refreshProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -281,13 +284,15 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const refreshServices = useCallback(async () => {
+  const refreshServices = useCallback(async (): Promise<ServiceStatus[]> => {
     setServicesLoading(true);
     try {
       const next = await fetchJson<{ services?: ServiceStatus[] }>("/api/connections", {
         cache: "no-store",
       });
-      startTransition(() => setServices(next.services ?? []));
+      const resolved = next.services ?? [];
+      startTransition(() => setServices(resolved));
+      return resolved;
     } finally {
       setServicesLoading(false);
     }
@@ -433,6 +438,105 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     setSetupTab(tab);
   }, []);
 
+  const connectService = useCallback(
+    async (provider: string) => {
+      if (connectingService) {
+        return false;
+      }
+
+      const serviceLabel =
+        services.find((service) => service.provider === provider)?.label ?? provider;
+
+      setConnectingService(provider);
+
+      try {
+        const data = await fetchJson<{ authorization_url?: string }>(
+          "/api/connections",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider }),
+          }
+        );
+
+        if (!data.authorization_url) {
+          addToast("No authorization URL was returned for this connection.", "error");
+          return false;
+        }
+
+        const popup = window.open(
+          data.authorization_url,
+          "cortex-connect",
+          "width=640,height=760,popup=yes"
+        );
+
+        if (!popup) {
+          addToast("The browser blocked the connection popup.", "error");
+          return false;
+        }
+
+        const connected = await new Promise<boolean>((resolve) => {
+          let settled = false;
+
+          const finish = async (timedOut = false) => {
+            if (settled) return;
+            settled = true;
+            window.clearInterval(interval);
+            window.clearTimeout(timeout);
+
+            let nextServices: ServiceStatus[] = [];
+            try {
+              nextServices = await refreshServices();
+              await refreshFocusMap();
+            } catch {
+              // Connection completion state is resolved via refreshed service status below.
+            }
+
+            const didConnect = nextServices.some(
+              (service) => service.provider === provider && service.connected
+            );
+
+            if (didConnect) {
+              addToast(`${serviceLabel} connected.`, "success");
+            } else if (timedOut) {
+              addToast(
+                `Still waiting on ${serviceLabel}. Finish the popup and try again if needed.`,
+                "warning"
+              );
+            } else {
+              addToast(`${serviceLabel} connection wasn't completed.`, "warning");
+            }
+
+            resolve(didConnect);
+          };
+
+          const interval = window.setInterval(() => {
+            if (popup.closed) {
+              void finish(false);
+            }
+          }, 1200);
+
+          const timeout = window.setTimeout(() => {
+            void finish(true);
+          }, 300000);
+        });
+
+        return connected;
+      } catch (error) {
+        addToast(
+          error instanceof Error
+            ? error.message
+            : "Failed to start the connection flow.",
+          "error"
+        );
+        return false;
+      } finally {
+        setConnectingService(null);
+      }
+    },
+    [addToast, connectingService, refreshFocusMap, refreshServices, services]
+  );
+
   const upsertPersonPreference = useCallback(
     async (preference: AttentionPersonPreference) => {
       const next = upsertAttentionPersonPreference(peoplePreferences, preference);
@@ -546,26 +650,6 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     [savePreferences]
   );
 
-  useEffect(() => {
-    if (!profile || !user || seededPeopleRef.current) return;
-
-    const seededPeople = getSeededAttentionPeopleForUser(user.email);
-    seededPeopleRef.current = true;
-
-    if (peoplePreferences.length > 0 || seededPeople.length === 0) {
-      return;
-    }
-
-    void savePreferences({
-      settings: {
-        dashboard: buildAttentionPeopleDashboardValue(seededPeople),
-      },
-    }).catch(() => {
-      seededPeopleRef.current = false;
-      // Errors surface via profileError state.
-    });
-  }, [peoplePreferences.length, profile, savePreferences, user]);
-
   const getItemFeedback = useCallback(
     (itemType: string, itemId: string) =>
       profile?.feedback.find(
@@ -620,6 +704,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       profile,
       focusProviders,
       services,
+      connectingService,
       focusMapWarnings,
       focusMapError,
       profileError,
@@ -636,6 +721,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       refreshProfile,
       refreshFocusMap,
       refreshServices,
+      connectService,
       ensureTeamChannels,
       setNodeImportance,
       completeOnboarding,
@@ -650,6 +736,8 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     [
       applyTarget,
       completeOnboarding,
+      connectService,
+      connectingService,
       ensureTeamChannels,
       focusMapError,
       focusMapLoading,
@@ -667,8 +755,8 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       refreshFocusMap,
       refreshProfile,
       refreshServices,
-      replyPreferences,
       services,
+      replyPreferences,
       servicesLoading,
       setNodeImportance,
       setupTab,
