@@ -54,6 +54,108 @@ export interface ReplyQueueItem {
   priorityReasons: string[];
 }
 
+export interface ThreadedItem {
+  threadKey: string;
+  items: ReplyQueueItem[];
+  representative: ReplyQueueItem;
+  senderSummary: string;
+  threadCount: number;
+  mostRecentTimestamp: string;
+  highestScore: number;
+  highestDisplayScore: number;
+}
+
+const REPLY_PREFIX_RE = /^(?:re|fwd?|fw):\s*/i;
+
+function normalizeThreadSubject(title: string): string {
+  let normalized = title;
+  let prev = "";
+  while (prev !== normalized) {
+    prev = normalized;
+    normalized = normalized.replace(REPLY_PREFIX_RE, "");
+  }
+  return normalized.trim();
+}
+
+function buildThreadKey(item: ReplyQueueItem): string {
+  switch (item.source) {
+    case "email":
+      return `email:${normalizeThreadSubject(item.title).toLowerCase()}`;
+    case "asana_comment":
+      return `asana:${(item.projectName || "").toLowerCase()}:${normalizeThreadSubject(item.title).toLowerCase()}`;
+    case "teams":
+      return `teams:${item.title.toLowerCase()}`;
+    case "slack_context":
+      return `slack:${item.title.toLowerCase()}`;
+  }
+}
+
+function buildSenderSummary(items: ReplyQueueItem[]): string {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const item of items) {
+    const name = item.sender;
+    if (!seen.has(name)) {
+      seen.add(name);
+      unique.push(name);
+    }
+  }
+  if (unique.length <= 2) return unique.join(", ");
+  return `${unique.slice(0, 2).join(", ")} +${unique.length - 2}`;
+}
+
+export function groupByThread(
+  items: ReplyQueueItem[],
+  threaded: boolean
+): ThreadedItem[] {
+  if (!threaded) {
+    return items.map((item) => ({
+      threadKey: item.id,
+      items: [item],
+      representative: item,
+      senderSummary: item.sender,
+      threadCount: 1,
+      mostRecentTimestamp: item.timestamp,
+      highestScore: item.score,
+      highestDisplayScore: item.displayScore,
+    }));
+  }
+
+  const groups = new Map<string, ReplyQueueItem[]>();
+  const groupOrder: string[] = [];
+
+  for (const item of items) {
+    const key = buildThreadKey(item);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(item);
+    } else {
+      groups.set(key, [item]);
+      groupOrder.push(key);
+    }
+  }
+
+  return groupOrder.map((key) => {
+    const group = groups.get(key)!;
+    const sorted = [...group].sort((a, b) => b.sortTime - a.sortTime);
+    const best = [...group].sort((a, b) => {
+      if (b.displayScore !== a.displayScore) return b.displayScore - a.displayScore;
+      return b.sortTime - a.sortTime;
+    })[0];
+
+    return {
+      threadKey: key,
+      items: sorted,
+      representative: best,
+      senderSummary: buildSenderSummary(sorted),
+      threadCount: group.length,
+      mostRecentTimestamp: sorted[0].timestamp,
+      highestScore: Math.max(...group.map((i) => i.score)),
+      highestDisplayScore: Math.max(...group.map((i) => i.displayScore)),
+    };
+  });
+}
+
 export interface ReplyScoreBreakdownItem {
   key: string;
   label: string;

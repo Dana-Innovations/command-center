@@ -21,6 +21,7 @@ import {
   createDefaultReplyPriorityPreferences,
   formatPriorityWeight,
   formatRelativeTime,
+  groupByThread,
   hasCustomizedReplyPriorityPreferences,
   mergeReplyPriorityPreferences,
   REPLY_PRIORITY_FACTOR_CONTROLS,
@@ -29,6 +30,7 @@ import {
   type ReplyPriorityPreferences,
   type ReplyQueueItem,
   type ReplySource,
+  type ThreadedItem,
 } from "@/lib/reply-center";
 
 type FilterId = "all" | ReplySource;
@@ -546,6 +548,7 @@ export function ReplyCenter() {
     return identity ? `reply-center:${identity}` : null;
   }, [currentUserEmail, currentUserName]);
 
+  const [threaded, setThreaded] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [snoozedUntil, setSnoozedUntil] = useState<Record<string, number>>({});
@@ -556,6 +559,7 @@ export function ReplyCenter() {
   const [storageReady, setStorageReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedThreadKey, setExpandedThreadKey] = useState<string | null>(null);
   const [selectedAsanaId, setSelectedAsanaId] = useState<string | null>(null);
   const [composerState, setComposerState] = useState<{
     itemId: string;
@@ -584,6 +588,15 @@ export function ReplyCenter() {
     Record<string, string>
   >({});
   const [postingAsanaId, setPostingAsanaId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedThreaded = window.localStorage.getItem("reply-center:threaded");
+    if (savedThreaded !== null) setThreaded(savedThreaded !== "false");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("reply-center:threaded", String(threaded));
+  }, [threaded]);
 
   useEffect(() => {
     if (!storageKey) {
@@ -683,6 +696,11 @@ export function ReplyCenter() {
       return true;
     });
   }, [activeFilter, attentionQueueItems, dismissedIds, snoozedUntil]);
+
+  const threadedItems = useMemo(
+    () => groupByThread(visibleItems, threaded),
+    [visibleItems, threaded]
+  );
 
   const counts = useMemo(() => {
     const now = Date.now();
@@ -920,6 +938,29 @@ export function ReplyCenter() {
     if (expandedId === itemId) setExpandedId(null);
     if (selectedAsanaId === itemId) setSelectedAsanaId(null);
     if (composerState?.itemId === itemId) setComposerState(null);
+    addToast("Snoozed for 12 hours.", "default");
+  }
+
+  function dismissThread(thread: ThreadedItem) {
+    for (const item of thread.items) {
+      dismissItem(item.id);
+    }
+  }
+
+  function snoozeThread(thread: ThreadedItem) {
+    const expiry = Date.now() + SNOOZE_MS;
+    setSnoozedUntil((current) => {
+      const next = { ...current };
+      for (const item of thread.items) {
+        next[item.id] = expiry;
+      }
+      return next;
+    });
+    for (const item of thread.items) {
+      if (expandedId === item.id) setExpandedId(null);
+      if (selectedAsanaId === item.id) setSelectedAsanaId(null);
+      if (composerState?.itemId === item.id) setComposerState(null);
+    }
     addToast("Snoozed for 12 hours.", "default");
   }
 
@@ -1749,7 +1790,32 @@ export function ReplyCenter() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-xl border border-[var(--bg-card-border)] overflow-hidden">
+                <button
+                  className={cn(
+                    "px-3 py-1.5 text-xs transition-colors",
+                    threaded
+                      ? "bg-[var(--tab-active-bg)] text-accent-amber"
+                      : "text-text-muted hover:text-text-body"
+                  )}
+                  onClick={() => setThreaded(true)}
+                >
+                  Threaded
+                </button>
+                <button
+                  className={cn(
+                    "px-3 py-1.5 text-xs transition-colors border-l border-[var(--bg-card-border)]",
+                    !threaded
+                      ? "bg-[var(--tab-active-bg)] text-accent-amber"
+                      : "text-text-muted hover:text-text-body"
+                  )}
+                  onClick={() => setThreaded(false)}
+                >
+                  All Messages
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
               {(Object.keys(FILTER_LABELS) as FilterId[]).map((filter) => (
                 <button
                   key={filter}
@@ -1765,6 +1831,7 @@ export function ReplyCenter() {
                   <span className="ml-1 opacity-70">{counts[filter]}</span>
                 </button>
               ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1855,7 +1922,10 @@ export function ReplyCenter() {
             >
               <div className="min-w-0">
                 <div className="divide-y divide-[var(--bg-card-border)] overflow-hidden rounded-[28px] border border-[var(--bg-card-border)] bg-black/10">
-                  {visibleItems.map((item, index) => {
+                  {threadedItems.map((thread, index) => {
+                    const item = thread.representative;
+                    const isThreaded = thread.threadCount > 1;
+                    const isThreadExpanded = expandedThreadKey === thread.threadKey;
                     const isExpanded =
                       item.source !== "asana_comment" && expandedId === item.id;
                     const isComposerOpen =
@@ -1868,10 +1938,10 @@ export function ReplyCenter() {
 
                     return (
                       <div
-                        key={item.id}
+                        key={thread.threadKey}
                         className={cn(
                           "px-4 py-4 transition-colors",
-                          isExpanded || isComposerOpen || isAsanaSelected
+                          isExpanded || isComposerOpen || isAsanaSelected || isThreadExpanded
                             ? "bg-white/[0.03]"
                             : "hover:bg-white/[0.02]"
                         )}
@@ -1879,7 +1949,7 @@ export function ReplyCenter() {
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                           <div className="flex items-start gap-3 lg:min-w-0 lg:flex-1">
                             <div className="pt-0.5">
-                              <ScoreBadge score={item.displayScore} />
+                              <ScoreBadge score={thread.highestDisplayScore} />
                             </div>
 
                             <div className="min-w-0 flex-1">
@@ -1897,28 +1967,41 @@ export function ReplyCenter() {
                                     Top queue
                                   </span>
                                 )}
+                                {isThreaded && (
+                                  <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-medium text-sky-200">
+                                    {thread.threadCount} messages
+                                  </span>
+                                )}
                                 <span className="text-[11px] text-text-muted">
                                   {item.source === "asana_comment"
-                                    ? `${item.projectName || "Tasks"} · ${formatRelativeTime(item.timestamp)}`
-                                    : item.meta}
+                                    ? `${item.projectName || "Tasks"} · ${formatRelativeTime(thread.mostRecentTimestamp)}`
+                                    : isThreaded
+                                      ? formatRelativeTime(thread.mostRecentTimestamp)
+                                      : item.meta}
                                 </span>
                               </div>
 
                               <div className="mt-2 flex flex-wrap items-start gap-3">
                                 <button
                                   className="hot-link text-left text-base font-medium leading-tight text-text-heading"
-                                  onClick={() =>
-                                    item.source === "asana_comment"
-                                      ? openAsanaInspector(item, "draft")
-                                      : toggleExpanded(item)
-                                  }
+                                  onClick={() => {
+                                    if (isThreaded) {
+                                      setExpandedThreadKey((current) =>
+                                        current === thread.threadKey ? null : thread.threadKey
+                                      );
+                                    } else if (item.source === "asana_comment") {
+                                      openAsanaInspector(item, "draft");
+                                    } else {
+                                      toggleExpanded(item);
+                                    }
+                                  }}
                                 >
                                   {item.title}
                                 </button>
                                 <span className="mt-0.5 text-xs text-text-muted">
                                   {item.source === "asana_comment"
-                                    ? `${item.sender} commented`
-                                    : `${item.sender}${item.projectName ? ` · ${item.projectName}` : ""}`}
+                                    ? `${thread.senderSummary} commented`
+                                    : `${thread.senderSummary}${item.projectName ? ` · ${item.projectName}` : ""}`}
                                 </span>
                               </div>
 
@@ -1928,7 +2011,7 @@ export function ReplyCenter() {
                                     <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 uppercase tracking-[0.14em]">
                                       Latest comment
                                     </span>
-                                    <span>{formatRelativeTime(item.timestamp)}</span>
+                                    <span>{formatRelativeTime(thread.mostRecentTimestamp)}</span>
                                     {item.taskDueOn ? (
                                       <>
                                         <span>·</span>
@@ -1963,12 +2046,12 @@ export function ReplyCenter() {
                                 </p>
                               )}
                               {"attention" in item &&
-                                item.attention.explanation.length > 0 && (
+                                (item as unknown as { attention: { explanation: string[] } }).attention.explanation.length > 0 && (
                                   <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
                                     <span className="mr-1 uppercase tracking-[0.18em] text-[10px] text-accent-green">
                                       Focus
                                     </span>
-                                    {item.attention.explanation.join(" · ")}
+                                    {(item as unknown as { attention: { explanation: string[] } }).attention.explanation.join(" · ")}
                                   </p>
                                 )}
 
@@ -2070,13 +2153,13 @@ export function ReplyCenter() {
                               )}
                               <button
                                 className="rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
-                                onClick={() => snoozeItem(item.id)}
+                                onClick={() => isThreaded ? snoozeThread(thread) : snoozeItem(item.id)}
                               >
                                 Snooze
                               </button>
                               <button
                                 className="rounded-md px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-accent-red"
-                                onClick={() => dismissItem(item.id)}
+                                onClick={() => isThreaded ? dismissThread(thread) : dismissItem(item.id)}
                               >
                                 Dismiss
                               </button>
@@ -2084,7 +2167,44 @@ export function ReplyCenter() {
                           )}
                         </div>
 
-                        {(isExpanded || isComposerOpen) && (
+                        {isThreaded && isThreadExpanded && (
+                          <div className="mt-4 space-y-2">
+                            {thread.items.map((threadItem) => (
+                              <div
+                                key={threadItem.id}
+                                className="flex items-start gap-3 rounded-2xl border border-[var(--bg-card-border)] bg-[var(--tab-bg)] px-4 py-3"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-medium text-text-heading">
+                                      {threadItem.sender}
+                                    </span>
+                                    <span className="text-[11px] text-text-muted">
+                                      {formatRelativeTime(threadItem.timestamp)}
+                                    </span>
+                                    <ScoreBadge score={threadItem.displayScore} />
+                                  </div>
+                                  <p className="mt-1.5 max-w-4xl text-sm leading-relaxed text-text-body line-clamp-2">
+                                    {threadItem.summary}
+                                  </p>
+                                </div>
+                                {threadItem.url && (
+                                  <a
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--bg-card-border)] px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-body"
+                                    href={threadItem.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    View
+                                    <ExternalLinkIcon size={11} />
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {!isThreaded && (isExpanded || isComposerOpen) && (
                           <div className="mt-4 rounded-[24px] border border-[var(--bg-card-border)] bg-[var(--tab-bg)] p-4">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                               <div className="text-[10px] uppercase tracking-[0.24em] text-text-muted">
