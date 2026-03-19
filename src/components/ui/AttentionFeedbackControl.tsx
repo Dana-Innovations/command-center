@@ -11,22 +11,20 @@ const OPTIONS: Array<{
   short: string;
   tooltip: string;
 }> = [
-  { value: "raise", label: "Raise", short: "Raise", tooltip: "Increase priority score for this item" },
-  { value: "right", label: "Right level", short: "Right", tooltip: "Mark as correctly prioritized" },
-  { value: "lower", label: "Lower", short: "Lower", tooltip: "Decrease priority score for this item" },
+  { value: "raise", label: "Raise", short: "Raise", tooltip: "Raise priority" },
+  { value: "right", label: "Right level", short: "Right", tooltip: "Priority is right" },
+  { value: "lower", label: "Lower", short: "Lower", tooltip: "Lower priority" },
 ];
 
 export function AttentionFeedbackControl({
   target,
   surface,
   compact = false,
-  showLabel = false,
   className,
 }: {
   target: AttentionTarget;
   surface?: string;
   compact?: boolean;
-  showLabel?: boolean;
   className?: string;
 }) {
   const { getItemFeedback, submitFeedback } = useAttention();
@@ -46,11 +44,6 @@ export function AttentionFeedbackControl({
       )}
       onClick={(event) => event.stopPropagation()}
     >
-      {showLabel && (
-        <span className="px-1.5 text-[9px] uppercase tracking-[0.18em] text-text-muted select-none">
-          Priority
-        </span>
-      )}
       {OPTIONS.map((option) => {
         const active = current === option.value;
         const busy = pending === option.value;
@@ -77,7 +70,6 @@ export function AttentionFeedbackControl({
                     : "bg-[var(--tab-active-bg)] text-text-heading"
                 : "text-text-muted hover:text-text-body"
             )}
-            title={option.tooltip}
           >
             {busy ? "..." : compact ? option.short : option.label}
             <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-[10px] rounded bg-gray-900 text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
