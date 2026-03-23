@@ -1090,7 +1090,7 @@ async function fetchTeamsChats(token: string, sessionId: string) {
   const now = new Date().toISOString();
 
   const withMessages = await Promise.allSettled(
-    chats.slice(0, 15).map(async (chat) => {
+    chats.slice(0, 20).map(async (chat) => {
       const msgsResult = await cortexCall(
         token,
         sessionId,
@@ -1140,6 +1140,16 @@ async function fetchTeamsChats(token: string, sessionId: string) {
         })
         .filter((msg) => msg.from && msg.text);
 
+      // Extract member display names from the chat response
+      const rawMembers = (chat.members ?? []) as Array<{
+        displayName?: string;
+        email?: string;
+        userId?: string;
+      }>;
+      const memberNames = rawMembers
+        .map((m) => m.displayName || "")
+        .filter((n) => n.length > 0);
+
       return {
         id: chat.id,
         chat_id: chat.id,
@@ -1149,7 +1159,7 @@ async function fetchTeamsChats(token: string, sessionId: string) {
         last_sender: lastFrom,
         last_message_from: lastFrom,
         last_activity: (chat.lastUpdatedDateTime as string) || now,
-        members: [],
+        members: memberNames,
         web_url:
           (chat.webUrl as string) ||
           (chat.webLink as string) ||
@@ -1165,7 +1175,7 @@ async function fetchTeamsChats(token: string, sessionId: string) {
     .map((r) => (r as PromiseFulfilledResult<unknown>).value)
     .filter((c) => {
       const chat = c as Record<string, unknown>;
-      return chat.last_message_preview || chat.topic;
+      return chat.last_message_preview || chat.topic || chat.last_message_from;
     });
 }
 
@@ -1227,6 +1237,51 @@ async function fetchTeamsChannelMessages(
     channelsToFetch = teamChannels.flatMap((result) =>
       result.status === "fulfilled" ? result.value : []
     );
+  }
+
+  // Auto-discover teams and channels when no focus preferences are configured
+  if (channelsToFetch.length === 0) {
+    try {
+      const teamsResult = await cortexCall(
+        token,
+        sessionId,
+        "auto_teams",
+        "m365__list_teams",
+        {}
+      );
+      const discoveredTeams = firstArrayProperty(teamsResult, [
+        "teams",
+        "value",
+        "data",
+      ]).slice(0, 3);
+
+      const discoveredChannels = await Promise.allSettled(
+        discoveredTeams.map(async (team) => {
+          const chResult = await cortexCall(
+            token,
+            sessionId,
+            `auto_channels_${team.id}`,
+            "m365__list_channels",
+            { team_id: String(team.id) }
+          );
+          const channels: Record<string, unknown>[] =
+            chResult.channels ?? chResult.value ?? [];
+          return channels.slice(0, 2).map((channel) => ({
+            teamId: String(team.id),
+            teamName: String(team.displayName ?? team.name ?? "Team"),
+            channelId: String(channel.id ?? ""),
+            channelName: String(channel.displayName ?? "Channel"),
+            importance: "normal" as const,
+          }));
+        })
+      );
+
+      channelsToFetch = discoveredChannels.flatMap((r) =>
+        r.status === "fulfilled" ? r.value.filter((c) => c.channelId) : []
+      );
+    } catch (e) {
+      console.warn("[live] teams auto-discovery failed:", e);
+    }
   }
 
   if (channelsToFetch.length === 0) {

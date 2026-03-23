@@ -9,6 +9,7 @@ export type TabId =
   | "operations";
 
 export type HomeSubView = "overview" | "setup";
+export type CommunicationsSubView = "replies" | "teams" | "slack" | "hygiene";
 export type CalendarSubView = "schedule" | "prep";
 export type PerformanceSubView = "sales" | "metrics";
 export type OperationsSubView = "delegation" | "orders";
@@ -76,6 +77,13 @@ export function parseHomeSubView(
   value: string | null | undefined
 ): HomeSubView {
   return value === "setup" ? "setup" : "overview";
+}
+
+export function parseCommunicationsSubView(
+  value: string | null | undefined
+): CommunicationsSubView {
+  if (value === "teams" || value === "slack" || value === "hygiene") return value;
+  return "replies";
 }
 
 export function parseCalendarSubView(

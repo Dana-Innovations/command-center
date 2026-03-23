@@ -20,12 +20,14 @@ import { AttentionProvider, useAttention } from "@/lib/attention/client";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
 import {
   parseCalendarSubView,
+  parseCommunicationsSubView,
   parseHomeSubView,
   parseOperationsSubView,
   parsePerformanceSubView,
   parseSetupFocusTab,
   parseTabId,
   type CalendarSubView,
+  type CommunicationsSubView,
   type HomeSubView,
   type OperationsSubView,
   type PerformanceSubView,
@@ -82,6 +84,8 @@ function HomeContent() {
   const badges = useTabBadges();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
+  const communicationsSubView: CommunicationsSubView =
+    parseCommunicationsSubView(searchParams.get("sub"));
   const calendarSubView: CalendarSubView = parseCalendarSubView(
     searchParams.get("sub")
   );
@@ -180,11 +184,23 @@ function HomeContent() {
         return;
       }
 
+      if (tab === "communications") {
+        syncUrl({
+          tab,
+          sub:
+            activeTab === "communications"
+              ? communicationsSubView
+              : "replies",
+        });
+        return;
+      }
+
       syncUrl({ tab });
     },
     [
       activeTab,
       calendarSubView,
+      communicationsSubView,
       operationsSubView,
       performanceSubView,
       prepEventId,
@@ -263,6 +279,15 @@ function HomeContent() {
     [activeTab, syncUrl]
   );
 
+  const handleCommunicationsSubViewChange = useCallback(
+    (subView: CommunicationsSubView) => {
+      if (activeTab === "communications") {
+        syncUrl({ tab: "communications", sub: subView });
+      }
+    },
+    [activeTab, syncUrl]
+  );
+
   const currentView = useMemo(() => {
     if (activeTab === "home") {
       return homeSubView === "setup" ? (
@@ -282,6 +307,8 @@ function HomeContent() {
     if (activeTab === "communications") {
       return (
         <CommunicationsView
+          subView={communicationsSubView}
+          onSubViewChange={handleCommunicationsSubViewChange}
           onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
         />
@@ -331,7 +358,9 @@ function HomeContent() {
   }, [
     activeTab,
     calendarSubView,
+    communicationsSubView,
     handleCalendarSubViewChange,
+    handleCommunicationsSubViewChange,
     handleConnectService,
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
