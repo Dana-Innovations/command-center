@@ -332,6 +332,7 @@ function HomeContent() {
           onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
           onSubViewChange={handleCalendarSubViewChange}
+          onOpenCalendarPrep={openCalendarPrep}
         />
       );
     }
