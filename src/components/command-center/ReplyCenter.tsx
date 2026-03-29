@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ExternalLinkIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AttentionFeedbackControl } from "@/components/ui/AttentionFeedbackControl";
+import { ReplyDrawer } from "@/components/command-center/ReplyDrawer";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmails } from "@/hooks/useEmails";
@@ -591,6 +592,7 @@ export function ReplyCenter() {
   const [promptTexts, setPromptTexts] = useState<Record<string, string>>({});
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [streamingId, setStreamingId] = useState<string | null>(null);
+  const [expandedReplyId, setExpandedReplyId] = useState<string | null>(null);
   const [emailDetails, setEmailDetails] = useState<Record<string, EmailDetail>>(
     {}
   );
@@ -2143,7 +2145,22 @@ export function ReplyCenter() {
                             </div>
                           </div>
 
-                          <div className="flex shrink-0 items-center lg:w-auto lg:justify-end">
+                          <div className="flex shrink-0 items-center gap-2 lg:w-auto lg:justify-end">
+                            <button
+                              className={cn(
+                                "rounded-md border px-2.5 py-1 text-[11px] transition-colors cursor-pointer",
+                                expandedReplyId === item.id
+                                  ? "border-accent-amber/50 text-accent-amber bg-accent-amber/10"
+                                  : "border-[var(--bg-card-border)] text-text-muted hover:text-text-body hover:border-accent-amber/30"
+                              )}
+                              onClick={() =>
+                                setExpandedReplyId(
+                                  expandedReplyId === item.id ? null : item.id
+                                )
+                              }
+                            >
+                              {expandedReplyId === item.id ? "Close" : "Reply"}
+                            </button>
                             <AttentionFeedbackControl
                               target={item.attentionTarget}
                               surface="reply-center"
@@ -2327,6 +2344,14 @@ export function ReplyCenter() {
 
                             {renderComposer(item)}
                           </div>
+                        )}
+
+                        {expandedReplyId === item.id && (
+                          <ReplyDrawer
+                            item={item}
+                            onSent={() => setExpandedReplyId(null)}
+                            onClose={() => setExpandedReplyId(null)}
+                          />
                         )}
                       </div>
                     );
