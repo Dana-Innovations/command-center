@@ -20,7 +20,6 @@ import {
 } from "@/lib/attention/targets";
 import { useAttention } from "@/lib/attention/client";
 import { getAttentionPersonRankingWeight } from "@/lib/attention/people";
-import type { TabId } from "@/lib/tab-config";
 
 /* ─── Types ─── */
 
@@ -126,6 +125,7 @@ export function useHomeData() {
   );
   const hasAnyService = connectedServices.length > 0;
   const hasM365 = connectedServices.some((s) => s.provider === "microsoft");
+  const hasAsana = connectedServices.some((s) => s.provider === "asana");
 
   /* ── Today's events ── */
   const todayEvents = useMemo(() => {
@@ -423,6 +423,7 @@ export function useHomeData() {
     connectedServices,
     hasAnyService,
     hasM365,
+    hasAsana,
     connectingService,
 
     // Attention
