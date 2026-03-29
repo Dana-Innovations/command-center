@@ -34,6 +34,45 @@ export const TONE_PRESETS: TonePreset[] = [
   },
 ];
 
+export interface SentimentChip {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+export const SENTIMENT_CHIPS: SentimentChip[] = [
+  {
+    id: "acknowledge",
+    label: "Acknowledge",
+    prompt: "Brief acknowledgment — confirm receipt, signal you'll follow up. Keep it to 1-3 sentences.",
+  },
+  {
+    id: "next-steps",
+    label: "Next Steps",
+    prompt: "Action-oriented reply — state what you'll do or what needs to happen next. Be specific about ownership and timing.",
+  },
+  {
+    id: "ask-context",
+    label: "Ask Context",
+    prompt: "Ask for clarification or more detail. Keep the questions minimal and specific — only what's needed to move forward.",
+  },
+  {
+    id: "delegate",
+    label: "Delegate",
+    prompt: "Loop in someone else to handle this. If Jeana is the logical delegate, suggest her. Be clear about what the delegate should do.",
+  },
+  {
+    id: "decline",
+    label: "Decline",
+    prompt: "Gracefully decline — can't take this on given current priorities. Don't over-explain. Keep it short and warm.",
+  },
+  {
+    id: "approve",
+    label: "Approve",
+    prompt: "Approve or give the go-ahead. Clear, direct, no unnecessary caveats.",
+  },
+];
+
 export function getWritingStyle(isAri: boolean): string {
   if (isAri) {
     return `You are drafting a reply for a CEO. Match this writing style:
