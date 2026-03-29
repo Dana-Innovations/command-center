@@ -3,9 +3,20 @@
 import { Button } from "@/components/ui/button";
 import { AttentionFeedbackControl } from "@/components/ui/AttentionFeedbackControl";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ServiceIcon } from "@/components/ui/ServiceIcon";
 import { CollapsibleSection } from "./CollapsibleSection";
 import type { TabId } from "@/lib/tab-config";
 import type { CommunicationCardItem } from "./useHomeData";
+
+function sourceLabel(item: CommunicationCardItem): string | null {
+  if (item.kind === "chat") {
+    if (item.subKind === "dm") return "DM";
+    if (item.subKind === "group-chat") return "Group Chat";
+    return "Teams";
+  }
+  if (item.kind === "asana") return "Comment";
+  return null;
+}
 
 interface HomeCommunicationsProps {
   items: CommunicationCardItem[];
@@ -39,44 +50,50 @@ export function HomeCommunications({
         <EmptyState variant="all-clear" context="communications" />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {filtered.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-[20px] border border-[var(--bg-card-border)] bg-white/[0.03] p-4"
-            >
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-[var(--bg-card-border)] bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                      {item.kind}
-                    </span>
-                    <span className="text-[11px] text-text-muted">{item.meta}</span>
+          {filtered.map((item) => {
+            const label = sourceLabel(item);
+            const CardWrapper = item.url ? "a" : "div";
+            const linkProps = item.url
+              ? { href: item.url, target: "_blank" as const, rel: "noopener noreferrer" }
+              : {};
+
+            return (
+              <CardWrapper
+                key={item.id}
+                {...linkProps}
+                className="group block rounded-[20px] border border-[var(--bg-card-border)] bg-white/[0.03] p-4 transition-colors duration-200 hover:border-[var(--bg-card-hover-border)]"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    {/* Meta row: icon + source label + sender + time */}
+                    <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <ServiceIcon kind={item.kind} size={14} className="shrink-0 opacity-70" />
+                      {label && (
+                        <>
+                          <span className="font-medium text-text-body">{label}</span>
+                          <span className="opacity-40">·</span>
+                        </>
+                      )}
+                      <span className="truncate">{item.meta}</span>
+                    </div>
+                    {/* Title */}
+                    <p className="mt-1.5 text-sm font-medium leading-snug text-text-heading group-hover:text-accent-amber transition-colors duration-200">
+                      {item.title}
+                    </p>
+                    {/* Preview */}
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-text-muted">
+                      {item.preview}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm font-medium text-text-heading">{item.title}</p>
-                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-text-muted">
-                    {item.preview}
-                  </p>
+                  <AttentionFeedbackControl
+                    target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
+                    surface="home"
+                    compact
+                  />
                 </div>
-                <AttentionFeedbackControl
-                  target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
-                  surface="home"
-                  compact
-                />
-              </div>
-              {item.url && (
-                <div className="mt-3">
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-medium text-accent-amber hover:underline"
-                  >
-                    Open source
-                  </a>
-                </div>
-              )}
-            </div>
-          ))}
+              </CardWrapper>
+            );
+          })}
         </div>
       )}
     </CollapsibleSection>
