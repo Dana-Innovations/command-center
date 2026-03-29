@@ -191,3 +191,19 @@ export interface AttentionProfile {
   feedback: ItemFeedbackRecord[];
   biases: PriorityBiasRecord[];
 }
+
+/* ── Exception Rules ── */
+
+export interface FocusExceptionRule {
+  id: string;
+  cortex_user_id: string;
+  provider: string | null;
+  entity_id: string | null;
+  entity_name: string | null;
+  condition_type: "topic" | "sender" | "keyword" | "label" | "mention";
+  condition_value: string;
+  override_tier: ImportanceTier;
+  raw_text: string | null;
+  created_at: string;
+  updated_at: string;
+}
