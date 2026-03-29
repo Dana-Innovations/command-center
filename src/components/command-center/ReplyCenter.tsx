@@ -64,6 +64,28 @@ const SOURCE_STYLES: Record<ReplySource, string> = {
   asana_comment: "tag-asana",
 };
 
+type CommsTier = "act-now" | "follow-up" | "aware";
+
+function assignCommsTier(score: number, timestamp: string): CommsTier {
+  if (score >= 70) return "act-now";
+  if (score >= 45) return "follow-up";
+  const ageMs = Date.now() - new Date(timestamp).getTime();
+  if (ageMs > 24 * 60 * 60 * 1000) return "follow-up";
+  return "aware";
+}
+
+function tierAgingLabel(timestamp: string): string | null {
+  const ageDays = Math.floor((Date.now() - new Date(timestamp).getTime()) / 86400000);
+  if (ageDays <= 0) return null;
+  return ageDays === 1 ? "aging 1 day" : `aging ${ageDays} days`;
+}
+
+const TIER_CONFIG = {
+  "act-now": { label: "Act Now", colorClass: "text-accent-amber", borderRgb: "212, 164, 76" },
+  "follow-up": { label: "Follow Up", colorClass: "text-accent-teal", borderRgb: "0, 178, 169" },
+  "aware": { label: "Stay Aware", colorClass: "text-text-muted", borderRgb: "255, 255, 255" },
+} as const;
+
 const QUICK_PROMPTS: Record<
   Exclude<ReplySource, "slack_context">,
   Array<{ id: string; label: string; prompt: string }>
@@ -701,6 +723,17 @@ export function ReplyCenter() {
     () => groupByThread(visibleItems, threaded),
     [visibleItems, threaded]
   );
+
+  const tierGroups = useMemo(() => {
+    const groups: Record<CommsTier, typeof threadedItems> = { "act-now": [], "follow-up": [], "aware": [] };
+    for (const thread of threadedItems) {
+      const tier = assignCommsTier(thread.highestDisplayScore, thread.mostRecentTimestamp);
+      groups[tier].push(thread);
+    }
+    return (["act-now", "follow-up", "aware"] as CommsTier[])
+      .filter((t) => groups[t].length > 0)
+      .map((t) => ({ tier: t, config: TIER_CONFIG[t], items: groups[t] }));
+  }, [threadedItems]);
 
   const counts = useMemo(() => {
     const now = Date.now();
@@ -1928,8 +1961,23 @@ export function ReplyCenter() {
               )}
             >
               <div className="min-w-0">
-                <div className="divide-y divide-[var(--bg-card-border)] overflow-hidden rounded-[28px] border border-[var(--bg-card-border)] bg-black/10">
-                  {threadedItems.map((thread, index) => {
+                {tierGroups.length > 0 && !tierGroups.some((g) => g.tier === "act-now") && (
+                  <div className="mb-4 rounded-xl border border-dashed border-accent-green/20 bg-accent-green/[0.03] px-4 py-3 text-center">
+                    <span className="text-xs text-accent-green">Nothing urgent right now</span>
+                  </div>
+                )}
+                {tierGroups.map((group) => (
+                  <div key={group.tier} className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${group.config.colorClass}`}>
+                        {group.config.label}
+                      </span>
+                      <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] tabular-nums text-text-muted">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-[var(--bg-card-border)] overflow-hidden rounded-[28px] border border-[var(--bg-card-border)] bg-black/10">
+                  {group.items.map((thread, index) => {
                     const item = thread.representative;
                     const isThreaded = thread.threadCount > 1;
                     const isThreadExpanded = expandedThreadKey === thread.threadKey;
@@ -1952,6 +2000,10 @@ export function ReplyCenter() {
                             ? "bg-white/[0.03]"
                             : "hover:bg-white/[0.02]"
                         )}
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftColor: `rgba(${group.config.borderRgb}, ${0.3 + Math.min(1, (thread.highestDisplayScore - 30) / 70) * 0.7})`,
+                        }}
                       >
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                           <div className="flex items-start gap-3 lg:min-w-0 lg:flex-1">
@@ -2035,6 +2087,11 @@ export function ReplyCenter() {
                                   {item.summary}
                                 </p>
                               )}
+
+                              {group.tier === "follow-up" && (() => {
+                                const age = tierAgingLabel(thread.mostRecentTimestamp);
+                                return age ? <span className="mt-1 inline-block text-[10px] font-medium text-accent-teal">{age}</span> : null;
+                              })()}
 
                               {item.priorityReasons.length > 0 && (
                                 <p className="mt-2 text-[11px] leading-relaxed text-text-muted">
@@ -2274,7 +2331,9 @@ export function ReplyCenter() {
                       </div>
                     );
                   })}
-                </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {selectedAsanaItem && (
