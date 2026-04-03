@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ALL_TAB_IDS, type TabId } from "@/lib/tab-config";
 import { cn } from "@/lib/utils";
 
@@ -99,9 +100,11 @@ export function TabBar({ activeTab, onTabChange, badges, className }: TabBarProp
   return (
     <>
       <div className="md:hidden sticky top-0 z-50 flex items-center justify-center h-12 bg-[#1a2028]/95 backdrop-blur-xl border-b border-[rgba(217,217,214,0.12)]">
-        <img
+        <Image
           src="https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png"
           alt="Sonance"
+          width={96}
+          height={24}
           className="h-6 w-auto"
         />
       </div>
@@ -148,9 +151,11 @@ export function TabBar({ activeTab, onTabChange, badges, className }: TabBarProp
 
       <div className={cn("hidden md:block mx-6", className)}>
         <div className="flex items-center gap-3 mb-3 pt-4">
-          <img
+          <Image
             src="https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png"
             alt="Sonance"
+            width={112}
+            height={28}
             className="h-7 w-auto"
           />
           <div className="h-5 w-px bg-[#D9D9D6] opacity-20" />

@@ -452,13 +452,13 @@ export function DigestView() {
   // ─── Meeting progress ──────────────────────────────────────────────────────
 
   const completedMeetingCount = useMemo(
-    () => todayMeetings.filter((e) => new Date(e.end_time).getTime() < new Date().getTime()).length,
+    () => todayMeetings.filter((e) => new Date(e.end_time).getTime() < now.getTime()).length,
     [todayMeetings, now]
   );
 
   const nextMeetingId = useMemo(() => {
     const upcoming = todayMeetings.find(
-      (e) => new Date(e.start_time).getTime() > new Date().getTime() && !isCurrentMeeting(e)
+      (e) => new Date(e.start_time).getTime() > now.getTime() && !isCurrentMeeting(e)
     );
     return upcoming?.id ?? null;
   }, [todayMeetings, now, isCurrentMeeting]);
@@ -473,12 +473,8 @@ export function DigestView() {
   // ─── My monkeys (progressive fallback) ─────────────────────────────────────
 
   const weekOutStr = useMemo(() => {
-    const pstNow = getPSTNow();
-    return formatLocalDate(new Date(
-      pstNow.getFullYear(),
-      pstNow.getMonth(),
-      pstNow.getDate() + 7
-    ));
+    const [y, m, d] = todayStr.split("-").map(Number);
+    return formatLocalDate(new Date(y, m - 1, d + 7));
   }, [todayStr]);
 
   const { myMonkeys, monkeyFallbackTier } = useMemo(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import {
@@ -69,9 +70,11 @@ function LoginContent() {
       <div className="max-w-md w-full mx-4">
         {/* Logo and Brand */}
         <div className="text-center mb-8">
-          <img
+          <Image
             src="https://brand.sonance.com/logos/sonance/Sonance_Logo_2C_Reverse_RGB.png"
             alt="Sonance"
+            width={160}
+            height={40}
             className="h-10 w-auto mx-auto mb-6"
           />
           <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">

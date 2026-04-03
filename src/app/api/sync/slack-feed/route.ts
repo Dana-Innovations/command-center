@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { getCortexUserFromRequest } from '@/lib/cortex/user';
 
 export async function POST(request: NextRequest) {
+  const user = await getCortexUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
   try {
     const { messages } = await request.json();
 

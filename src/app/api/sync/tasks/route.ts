@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { getCortexUserFromRequest } from '@/lib/cortex/user';
 
 export async function POST(request: NextRequest) {
-  try {
-    const { tasks, user_id } = await request.json();
+  const user = await getCortexUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
 
-    if (!user_id) {
-      return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-    }
+  try {
+    const { tasks } = await request.json();
 
     if (!tasks || !Array.isArray(tasks)) {
       return NextResponse.json({ error: 'Invalid payload: tasks array required' }, { status: 400 });
@@ -18,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const rows = tasks.map((task: Record<string, unknown>) => ({
       ...task,
-      user_id,
+      user_id: user.sub,
       synced_at: now,
     }));
 
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
       data_type: 'tasks',
       items_synced: data.length,
       status: 'completed',
-      user_id,
+      user_id: user.sub,
       started_at: now,
       completed_at: new Date().toISOString(),
     });

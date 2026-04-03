@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { getCortexUserFromRequest } from '@/lib/cortex/user';
 
 export async function POST(request: NextRequest) {
-  try {
-    const { action_id, user_id } = await request.json();
+  const user = await getCortexUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
 
-    if (!user_id) {
-      return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-    }
+  try {
+    const { action_id } = await request.json();
 
     if (!action_id) {
       return NextResponse.json({ error: 'Invalid payload: action_id required' }, { status: 400 });

@@ -27,7 +27,7 @@ function pickFormalityGuidance(
   channel: string,
   relevanceTier: string
 ): string {
-  if (channel === "teams" || channel === "slack" || channel === "slack context") {
+  if (channel === "teams" || channel === "slack") {
     return "Use Level 8 (Teams Chat) from the Writing Style Guide: most casual, stream of consciousness, often lowercase, periods optional, short fragments. No sign-off.";
   }
   if (channel === "asana") {

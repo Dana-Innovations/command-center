@@ -7,6 +7,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  // Security: reportId/workspaceId are scoped by the user's cortexToken.
+  // Cortex MCP enforces Okta AD permissions — users can only embed reports they own.
+
   try {
     const { reportId, datasetIds, workspaceId } = await request.json();
 

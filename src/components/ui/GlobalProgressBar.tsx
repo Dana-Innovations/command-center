@@ -5,17 +5,26 @@ import { useEffect, useState } from "react";
 type Phase = "idle" | "loading" | "completing";
 
 export function GlobalProgressBar({ isActive }: { isActive: boolean }) {
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>(isActive ? "loading" : "idle");
+  const [prevIsActive, setPrevIsActive] = useState(isActive);
 
-  useEffect(() => {
-    if (isActive && phase === "idle") {
+  // Adjust state during render when prop changes
+  // (React-recommended pattern — no effect needed for prop-driven transitions)
+  if (isActive !== prevIsActive) {
+    setPrevIsActive(isActive);
+    if (isActive) {
       setPhase("loading");
-    } else if (!isActive && phase === "loading") {
+    } else if (phase === "loading") {
       setPhase("completing");
-      const timer = setTimeout(() => setPhase("idle"), 400);
-      return () => clearTimeout(timer);
     }
-  }, [isActive, phase]);
+  }
+
+  // Timer clears the completion animation (async — not a synchronous effect setState)
+  useEffect(() => {
+    if (phase !== "completing") return;
+    const timer = setTimeout(() => setPhase("idle"), 400);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   if (phase === "idle") return null;
 

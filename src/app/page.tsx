@@ -8,6 +8,10 @@ import { TabBar } from "@/components/layout/TabBar";
 import { GlobalProgressBar } from "@/components/ui/GlobalProgressBar";
 import { EODSummary } from "@/components/modals/EODSummary";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
+import { DeltaFeedPanel } from "@/components/command-center/DeltaFeedPanel";
+import { DeltaToast } from "@/components/ui/DeltaToast";
+import { useDeltaFeed } from "@/hooks/useDeltaFeed";
+import { createSnapshot, saveSnapshot } from "@/lib/delta-snapshot";
 import { CalendarHubView } from "@/components/views/CalendarHubView";
 import { CommunicationsView } from "@/components/views/CommunicationsView";
 import { HomeView } from "@/components/views/HomeView";
@@ -79,7 +83,10 @@ function HomeContent() {
   const [recentlyConnectedProvider, setRecentlyConnectedProvider] = useState<
     string | null
   >(null);
-  const { loading, fetchedAt, error, refetch } = useLiveData();
+  const [deltaOpen, setDeltaOpen] = useState(false);
+  const liveData = useLiveData();
+  const { loading, fetchedAt, error, refetch } = liveData;
+  const delta = useDeltaFeed();
   const { focusRevision, openSetupFocus, connectService } = useAttention();
   const badges = useTabBadges();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
@@ -148,6 +155,27 @@ function HomeContent() {
       syncUrl({ tab: "home", sub: "overview" });
     }
   }, [searchParams, syncUrl]);
+
+  // Save snapshot after each successful data fetch (for delta diffing)
+  useEffect(() => {
+    if (!fetchedAt) return;
+    saveSnapshot(
+      createSnapshot({
+        emails: liveData.emails,
+        calendar: liveData.calendar,
+        tasks: liveData.tasks,
+        chats: liveData.chats,
+        slack: liveData.slack,
+        opportunities: liveData.opportunities,
+      })
+    );
+  }, [fetchedAt, liveData.emails, liveData.calendar, liveData.tasks, liveData.chats, liveData.slack, liveData.opportunities]);
+
+  // Enrich delta groups when panel opens
+  const enrichDeltaGroups = delta.enrichGroups;
+  useEffect(() => {
+    if (deltaOpen) enrichDeltaGroups();
+  }, [deltaOpen, enrichDeltaGroups]);
 
   const navigateToTab = useCallback(
     (tab: TabId) => {
@@ -389,6 +417,8 @@ function HomeContent() {
         syncError={error}
         onSearchOpen={() => setSearchOpen(true)}
         onOpenSetup={() => openSetup("focus")}
+        deltaCount={delta.totalChanges}
+        onDeltaOpen={() => setDeltaOpen(true)}
       />
 
       <TabBar activeTab={activeTab} onTabChange={navigateToTab} badges={badges} className="mb-5" />
@@ -401,6 +431,26 @@ function HomeContent() {
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
         onNavigate={(tab) => navigateToTab(parseTabId(tab))}
+      />
+
+      {delta.showToast && (
+        <DeltaToast
+          count={delta.totalChanges}
+          onClick={() => {
+            delta.dismissToast();
+            setDeltaOpen(true);
+          }}
+          onDismiss={delta.dismissToast}
+        />
+      )}
+
+      <DeltaFeedPanel
+        isOpen={deltaOpen}
+        onClose={() => setDeltaOpen(false)}
+        groups={delta.groups}
+        totalChanges={delta.totalChanges}
+        lastSeenAt={delta.lastSeenAt}
+        onAcknowledge={delta.acknowledge}
       />
     </div>
   );

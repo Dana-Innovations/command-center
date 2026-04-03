@@ -134,8 +134,12 @@ export function ReplyDrawer({ item, onSent, onClose }: ReplyDrawerProps) {
     try {
       if (item.source === "email") {
         // Hard Lock: draft only — copy to clipboard
-        await navigator.clipboard?.writeText(text);
-        addToast("Draft copied to clipboard", "success");
+        try {
+          await navigator.clipboard.writeText(text);
+          addToast("Draft copied to clipboard", "success");
+        } catch {
+          addToast("Could not copy — please select and copy manually", "error");
+        }
         setSendState("sent");
         return;
       }
@@ -204,13 +208,26 @@ export function ReplyDrawer({ item, onSent, onClose }: ReplyDrawerProps) {
       </div>
 
       {/* Streaming textarea */}
-      <textarea
-        ref={textareaRef}
-        className="min-h-[100px] w-full rounded-lg border border-[var(--bg-card-border)] bg-[rgba(0,0,0,0.15)] p-3 text-[13px] leading-relaxed text-text-body outline-none transition-colors focus:border-accent-amber/40 resize-none"
-        placeholder="Tap a sentiment above or type your reply..."
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-      />
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          className={cn(
+            "min-h-[100px] w-full rounded-lg border bg-[rgba(0,0,0,0.15)] p-3 text-[13px] leading-relaxed text-text-body outline-none transition-colors resize-none",
+            isStreaming
+              ? "border-accent-amber/40"
+              : "border-[var(--bg-card-border)] focus:border-accent-amber/40"
+          )}
+          placeholder="Tap a sentiment above or type your reply..."
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        {isStreaming && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-amber animate-pulse" />
+            <span className="text-[10px] text-accent-amber/70">Drafting…</span>
+          </div>
+        )}
+      </div>
 
       {/* Error */}
       {error && (

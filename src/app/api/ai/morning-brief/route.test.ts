@@ -193,11 +193,13 @@ function createSupabaseMock(options?: {
     input_hash: string;
   } | null;
 }) {
+  // .in() resolves to empty data (for relationship dossier queries)
+  const inMock = vi.fn(() => Promise.resolve({ data: [], error: null }));
   const maybeSingle = vi
     .fn()
     .mockResolvedValue({ data: options?.cached ?? null, error: null });
-  const eqBriefDate = vi.fn(() => ({ maybeSingle }));
-  const eqUser = vi.fn(() => ({ eq: eqBriefDate }));
+  const eqBriefDate = vi.fn(() => ({ maybeSingle, in: inMock }));
+  const eqUser = vi.fn(() => ({ eq: eqBriefDate, in: inMock }));
   const select = vi.fn(() => ({ eq: eqUser }));
   const upsert = vi.fn().mockResolvedValue({ error: null });
   const from = vi.fn(() => ({ select, upsert }));
