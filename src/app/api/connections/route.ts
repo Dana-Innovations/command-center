@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const connections = await getConnections(cortexToken);
+  const { connections } = await getConnections(cortexToken);
 
   // Map to the services the Command Center needs, matching by mcp_name or provider
   const services = REQUIRED_SERVICES.map((svc) => {
@@ -55,9 +55,9 @@ export async function POST(request: NextRequest) {
   const result = await initiateConnect(cortexToken, provider);
   if (!result) {
     // Check if already connected — Cortex may reject re-initiation
-    const connections = await getConnections(cortexToken);
+    const { connections: conns } = await getConnections(cortexToken);
     const svc = REQUIRED_SERVICES.find((s) => s.provider === provider);
-    const alreadyConnected = connections.some(
+    const alreadyConnected = conns.some(
       (c) =>
         (svc && (matchesConnectionName(c, svc.mcp_name) || matchesConnectionName(c, svc.provider))) &&
         c.connected

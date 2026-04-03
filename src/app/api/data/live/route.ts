@@ -11,7 +11,7 @@ import {
   cortexCall,
   callCortexMCP,
 } from "@/lib/cortex/client";
-import { getConnections, type CortexConnection } from "@/lib/cortex/connections";
+import { getConnections, cacheConnectionStatus, type CortexConnection } from "@/lib/cortex/connections";
 import { getCortexUserFromRequest } from "@/lib/cortex/user";
 import { normalizeCalendarDateTime } from "@/lib/calendar";
 import { persistPeopleSnapshots } from "@/lib/people-relevance";
@@ -1729,8 +1729,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Check which services the user has connected via Cortex
-  const connections = await getConnections(cortexToken);
+  // Check which services the user has connected via Cortex (with retry + cache fallback)
+  const connectionsResult = await getConnections(cortexToken, cortexUser?.sub);
+  const connections = connectionsResult.connections;
+  const connectionError = connectionsResult.fromCache;
   const hasM365 = hasConnection(connections, "m365") || hasConnection(connections, "microsoft");
   const hasAsana = hasConnection(connections, "asana");
   const hasSlack = hasConnection(connections, "slack");
@@ -1738,7 +1740,12 @@ export async function GET(request: NextRequest) {
   const hasPowerBI = hasConnection(connections, "powerbi");
   const hasMonday = hasConnection(connections, "monday");
 
-  console.log("[live] Connection status:", { hasM365, hasAsana, hasSlack, hasSalesforce, hasPowerBI, hasMonday });
+  console.log("[live] Connection status:", { hasM365, hasAsana, hasSlack, hasSalesforce, hasPowerBI, hasMonday, fromCache: connectionError });
+
+  // Cache connection status to Supabase (fire-and-forget)
+  if (!connectionError && cortexUser?.sub) {
+    void cacheConnectionStatus(cortexUser.sub, connections);
+  }
 
   // Initialize Cortex session with user's token
   let sessionId = "";
@@ -1766,6 +1773,7 @@ export async function GET(request: NextRequest) {
         errors,
         skipped: ["all — no Cortex session"],
         connections: { m365: hasM365, asana: hasAsana, slack: hasSlack, salesforce: hasSalesforce, powerbi: hasPowerBI, monday: hasMonday },
+        connectionError,
       },
       { status: 200 }
     );

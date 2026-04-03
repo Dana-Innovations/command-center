@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Check if Monday.com is connected
-  const connections = await getConnections(cortexToken);
+  const { connections } = await getConnections(cortexToken);
   const hasMonday = connections.some(
     (c) => (c.mcp_name === "monday" || c.provider === "monday") && c.connected
   );

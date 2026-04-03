@@ -7,6 +7,16 @@ import { CommandBar, type CommandItem } from "@/components/ui/CommandBar";
 import { useAuth } from "@/hooks/useAuth";
 import { useLiveData } from "@/lib/live-data-context";
 
+function formatCacheAge(cachedAt: string): string {
+  const diff = Date.now() - new Date(cachedAt).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 interface HeaderProps {
   onRefresh?: () => void;
   isSyncing?: boolean;
@@ -31,8 +41,19 @@ export function Header({
   onDeltaOpen,
 }: HeaderProps) {
   const { user, signOut } = useAuth();
-  const { loading, error } = useLiveData();
+  const { loading, error, dataSource, cachedAt, connectionError } = useLiveData();
   const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [showUpdated, setShowUpdated] = useState(false);
+  const [dismissedConnError, setDismissedConnError] = useState(false);
+
+  // Show "Updated just now" briefly when live data arrives
+  useEffect(() => {
+    if (dataSource === "live") {
+      setShowUpdated(true);
+      const timer = setTimeout(() => setShowUpdated(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [dataSource]);
 
   const userInitial = user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? "?";
   const userName = user?.user_metadata?.full_name ?? user?.email ?? "";
@@ -83,14 +104,49 @@ export function Header({
           <div className="hidden h-8 w-px bg-white/10 md:block" />
           <div className="flex items-center gap-2 text-sm text-text-muted">
             <div
-              className={loading ? "h-2.5 w-2.5 rounded-full bg-accent-amber animate-pulse" : error ? "h-2.5 w-2.5 rounded-full bg-accent-red" : "h-2.5 w-2.5 rounded-full bg-accent-green"}
-              title={loading ? "Syncing..." : error ? `Error: ${error}` : "Data live"}
+              className={
+                dataSource === "cache"
+                  ? "h-2.5 w-2.5 rounded-full bg-accent-amber animate-pulse"
+                  : loading && dataSource === "loading"
+                    ? "h-2.5 w-2.5 rounded-full bg-accent-amber animate-pulse"
+                    : error
+                      ? "h-2.5 w-2.5 rounded-full bg-accent-red"
+                      : "h-2.5 w-2.5 rounded-full bg-accent-green"
+              }
+              title={
+                dataSource === "cache"
+                  ? `Showing cached data${cachedAt ? ` from ${formatCacheAge(cachedAt)}` : ""} — refreshing...`
+                  : loading && dataSource === "loading"
+                    ? "Loading..."
+                    : error
+                      ? `Error: ${error}`
+                      : "Data live"
+              }
             />
-            <SyncIndicator
-              isSyncing={isSyncing}
-              lastSyncedAt={lastSyncedAt}
-              syncError={syncError}
-            />
+            {dataSource === "cache" && cachedAt ? (
+              <span className="text-[11px] text-text-muted">
+                Cached · {formatCacheAge(cachedAt)}
+              </span>
+            ) : showUpdated ? (
+              <span className="text-[11px] text-accent-green animate-pulse">
+                Updated just now
+              </span>
+            ) : (
+              <SyncIndicator
+                isSyncing={isSyncing}
+                lastSyncedAt={lastSyncedAt}
+                syncError={syncError}
+              />
+            )}
+            {connectionError && !dismissedConnError && (
+              <button
+                onClick={() => setDismissedConnError(true)}
+                className="text-[10px] text-accent-amber bg-accent-amber/10 px-2 py-0.5 rounded-full hover:bg-accent-amber/20 transition-colors"
+                title="Dismiss"
+              >
+                Some services may be stale ✕
+              </button>
+            )}
           </div>
         </div>
 

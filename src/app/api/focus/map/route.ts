@@ -665,7 +665,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const connections = await getConnections(token);
+    const { connections } = await getConnections(token);
     const providers = requestedProviders.map((definition) =>
       buildProviderNode(
         definition,

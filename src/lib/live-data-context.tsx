@@ -31,6 +31,8 @@ export interface ConnectionStatus {
   monday: boolean;
 }
 
+export type DataSource = "loading" | "cache" | "live";
+
 interface LiveDataState {
   emails: Email[];
   sentEmails: Email[];
@@ -47,6 +49,9 @@ interface LiveDataState {
   loading: boolean;
   error: string | null;
   fetchedAt: Date | null;
+  dataSource: DataSource;
+  cachedAt: string | null;
+  connectionError: boolean;
   refetch: () => Promise<void>;
 }
 
@@ -110,6 +115,10 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
+  const [dataSource, setDataSource] = useState<DataSource>("loading");
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState(false);
+  const cacheAttemptedRef = useRef(false);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -252,6 +261,46 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
     [scheduleNextRefresh]
   );
 
+  // Phase 1: Fetch cached data from Supabase for instant display
+  const fetchCachedData = useCallback(async () => {
+    if (cacheAttemptedRef.current) return;
+    cacheAttemptedRef.current = true;
+
+    try {
+      const res = await fetch("/api/data/cached", { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.empty) return; // No cached data — first-ever login
+
+      const nextFetchedAt = new Date(data.fetchedAt ?? Date.now());
+
+      startTransition(() => {
+        setEmails((data.emails ?? []) as Email[]);
+        setSentEmails((data.sentEmails ?? []) as Email[]);
+        setCalendar((data.calendar ?? []) as CalendarEvent[]);
+        setTasks((data.tasks ?? []) as Task[]);
+        setOpportunities((data.pipeline ?? []) as SalesforceOpportunity[]);
+        setChats((data.chats ?? []) as Chat[]);
+        setSlack((data.slack ?? []) as SlackFeedMessage[]);
+        if (data.connections) {
+          setConnections(data.connections as ConnectionStatus);
+        }
+        setFetchedAt(nextFetchedAt);
+        setDataSource("cache");
+        setCachedAt(data.cachedAt ?? null);
+        setLoading(false);
+      });
+
+      console.info("[CommandCenter] Loaded cached data from Supabase", {
+        cachedAt: data.cachedAt,
+      });
+    } catch (e) {
+      console.warn("[CommandCenter] Cache fetch failed, falling through to live:", e);
+    }
+  }, []);
+
+  // Phase 2: Fetch live data from Cortex (replaces cached data)
   const fetchLiveData = useCallback(
     async (reason: FetchReason = "manual") => {
       if (!mountedRef.current || !isDocumentVisible()) {
@@ -267,7 +316,10 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       }
 
       stopScheduledWork();
-      setLoading(true);
+      // Only show loading spinner if we don't have cached data yet
+      if (dataSource === "loading") {
+        setLoading(true);
+      }
 
       const request = (async () => {
         try {
@@ -304,6 +356,9 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
               setConnections(data.connections as ConnectionStatus);
             }
             setFetchedAt(nextFetchedAt);
+            setDataSource("live");
+            setCachedAt(null);
+            setConnectionError(!!data.connectionError);
             setError(null);
           });
 
@@ -326,7 +381,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       inFlightRef.current = request;
       return request;
     },
-    [scheduleNextRefresh, scheduleRetry, stopScheduledWork]
+    [dataSource, scheduleNextRefresh, scheduleRetry, stopScheduledWork]
   );
 
   fetchLiveDataRef.current = fetchLiveData;
@@ -341,6 +396,9 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
+
+    // Phase 1: Load cached data from Supabase immediately (non-blocking)
+    void fetchCachedData();
 
     const handleVisible = (reason: Extract<FetchReason, "mount" | "visible" | "focus" | "leader">) => {
       const becameLeader = claimLeadership(reason !== "leader");
@@ -431,7 +489,7 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
       }
       releaseLeadership();
     };
-  }, [claimLeadership, maybeRefreshAfterResume, readLeaderLease, releaseLeadership, stopScheduledWork, writeLeaderLease]);
+  }, [claimLeadership, fetchCachedData, maybeRefreshAfterResume, readLeaderLease, releaseLeadership, stopScheduledWork, writeLeaderLease]);
 
   return (
     <LiveDataContext.Provider
@@ -451,6 +509,9 @@ export function LiveDataProvider({ children }: { children: ReactNode }) {
         loading,
         error,
         fetchedAt,
+        dataSource,
+        cachedAt,
+        connectionError,
         refetch,
       }}
     >
