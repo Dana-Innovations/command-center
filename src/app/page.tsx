@@ -83,6 +83,7 @@ function HomeContent() {
   const [eodOpen, setEodOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [deltaOpen, setDeltaOpen] = useState(false);
+  const [inSetupFlow, setInSetupFlow] = useState(false);
   const liveData = useLiveData();
   const { loading, fetchedAt, error, refetch } = liveData;
   const delta = useDeltaFeed();
@@ -90,6 +91,13 @@ function HomeContent() {
   const connections = useConnections();
   const hasAnyConnection = connections.m365 || connections.asana || connections.slack || connections.salesforce || connections.powerbi || connections.monday;
   const badges = useTabBadges();
+
+  // Latch: enter setup flow when needed, stay until user clicks Continue
+  useEffect(() => {
+    if ((!onboardingCompleted || !hasAnyConnection) && !inSetupFlow) {
+      setInSetupFlow(true);
+    }
+  }, [onboardingCompleted, hasAnyConnection, inSetupFlow]);
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
   const communicationsSubView: CommunicationsSubView =
@@ -257,6 +265,7 @@ function HomeContent() {
   );
 
   const handleSetupComplete = useCallback(async () => {
+    setInSetupFlow(false);
     await refetch();
     syncUrl({ tab: "home", sub: "overview" });
   }, [refetch, syncUrl]);
@@ -303,7 +312,7 @@ function HomeContent() {
 
   const currentView = useMemo(() => {
     if (activeTab === "home") {
-      if (!onboardingCompleted || !hasAnyConnection) {
+      if (inSetupFlow) {
         return <SetupFlow onComplete={handleSetupComplete} />;
       }
       return homeSubView === "setup" ? (
@@ -374,11 +383,10 @@ function HomeContent() {
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
     handleSetupComplete,
-    hasAnyConnection,
     homeSubView,
+    inSetupFlow,
     loading,
     navigateToTab,
-    onboardingCompleted,
     openCalendarPrep,
     openHomeOverview,
     openSetup,
