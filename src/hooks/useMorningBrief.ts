@@ -93,15 +93,20 @@ export function useMorningBrief() {
     [apiSnapshot]
   );
 
-  // Auto-generate on first load once data arrives
+  // Auto-generate on first load once any data arrives
   const hasDataRef = useRef(false);
   useEffect(() => {
-    const hasData = emails.length + tasks.length + events.length > 0;
+    const hasData =
+      emails.length > 0 ||
+      tasks.length > 0 ||
+      events.length > 0 ||
+      chats.length > 0 ||
+      slackMessages.length > 0;
     if (status === "idle" && hasData && !hasDataRef.current) {
       hasDataRef.current = true;
       void generate();
     }
-  }, [status, emails.length, tasks.length, events.length, generate]);
+  }, [status, emails.length, tasks.length, events.length, chats.length, slackMessages.length, generate]);
 
   // Auto-regenerate when snapshot hash changes (data refreshed)
   const prevHashRef = useRef(snapshotHash);

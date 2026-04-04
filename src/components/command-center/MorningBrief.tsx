@@ -111,10 +111,32 @@ export function MorningBrief({
     );
   }
 
-  // Don't render anything if idle with no data yet
-  if (status === "idle") return null;
-
   const hour = new Date().getHours();
+
+  // Show a generate prompt if idle (no data yet or brief not triggered)
+  if (status === "idle") {
+    return (
+      <section
+        className="glass-card anim-card overflow-hidden"
+        style={{ animationDelay: "0ms" }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,163,225,0.14),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(200,155,60,0.10),transparent_36%)]" />
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.28em] text-accent-amber">
+              {getGreeting(hour)} Brief
+            </div>
+            <p className="mt-2 text-sm text-text-muted">
+              Your AI-generated brief is ready when you are.
+            </p>
+          </div>
+          <Button variant="primary" size="sm" onClick={() => refresh()}>
+            Generate
+          </Button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="glass-card anim-card overflow-hidden" style={{ animationDelay: "0ms" }}>
