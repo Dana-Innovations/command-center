@@ -10,14 +10,12 @@ import { SurfaceIntro, SurfaceSubnav } from "@/components/views/SurfaceChrome";
 
 interface OperationsViewProps {
   activeSubView: OperationsSubView;
-  onConnectService: (provider: string) => Promise<void>;
   onOpenSetup?: () => void;
   onSubViewChange: (subView: OperationsSubView) => void;
 }
 
 export function OperationsView({
   activeSubView,
-  onConnectService: _onConnectService,
   onOpenSetup,
   onSubViewChange,
 }: OperationsViewProps) {

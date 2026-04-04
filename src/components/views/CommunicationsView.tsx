@@ -23,13 +23,11 @@ interface CommunicationsViewProps {
   subView: CommunicationsSubView;
   onSubViewChange: (sub: CommunicationsSubView) => void;
   onOpenSetup?: () => void;
-  onConnectService: (provider: string) => Promise<void>;
 }
 
 export function CommunicationsView({
   subView,
   onSubViewChange,
-  onConnectService: _onConnectService,
   onOpenSetup,
 }: CommunicationsViewProps) {
   const connections = useConnections();

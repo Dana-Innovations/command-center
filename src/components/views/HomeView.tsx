@@ -21,7 +21,6 @@ interface HomeViewProps {
   onNavigate: (tab: TabId) => void;
   onOpenCalendarPrep: (eventId?: string) => void;
   onOpenSetup: (tab?: SetupFocusTab) => void;
-  onConnectService: (provider: string) => Promise<void>;
   recentlyConnectedProvider?: string | null;
   isSyncingLiveData?: boolean;
 }
@@ -30,7 +29,6 @@ export function HomeView({
   onNavigate,
   onOpenCalendarPrep,
   onOpenSetup,
-  onConnectService: _onConnectService,
   recentlyConnectedProvider = null,
   isSyncingLiveData = false,
 }: HomeViewProps) {

@@ -11,7 +11,6 @@ import { SurfaceIntro, SurfaceSubnav } from "@/components/views/SurfaceChrome";
 interface CalendarHubViewProps {
   activeSubView: CalendarSubView;
   initialEventId?: string;
-  onConnectService: (provider: string) => Promise<void>;
   onOpenCalendarPrep?: (eventId?: string) => void;
   onOpenSetup?: () => void;
   onSubViewChange: (subView: CalendarSubView) => void;
@@ -20,7 +19,6 @@ interface CalendarHubViewProps {
 export function CalendarHubView({
   activeSubView,
   initialEventId,
-  onConnectService: _onConnectService,
   onOpenCalendarPrep,
   onOpenSetup,
   onSubViewChange,

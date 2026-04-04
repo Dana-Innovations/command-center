@@ -81,14 +81,11 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const [eodOpen, setEodOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [recentlyConnectedProvider, setRecentlyConnectedProvider] = useState<
-    string | null
-  >(null);
   const [deltaOpen, setDeltaOpen] = useState(false);
   const liveData = useLiveData();
   const { loading, fetchedAt, error, refetch } = liveData;
   const delta = useDeltaFeed();
-  const { focusRevision, openSetupFocus, connectService, onboardingCompleted } = useAttention();
+  const { focusRevision, openSetupFocus, onboardingCompleted } = useAttention();
   const badges = useTabBadges();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
@@ -261,27 +258,6 @@ function HomeContent() {
     syncUrl({ tab: "home", sub: "overview" });
   }, [refetch, syncUrl]);
 
-  const handleConnectService = useCallback(
-    async (provider: string) => {
-      const connected = await connectService(provider);
-      if (!connected) return;
-
-      syncUrl({ tab: "home", sub: "overview" });
-      if (provider !== "microsoft") {
-        await refetch();
-        return;
-      }
-
-      setRecentlyConnectedProvider(provider);
-      try {
-        await refetch();
-      } finally {
-        setRecentlyConnectedProvider(null);
-      }
-    },
-    [connectService, refetch, syncUrl]
-  );
-
   const handleCalendarSubViewChange = useCallback(
     (subView: CalendarSubView) => {
       if (activeTab === "calendar") {
@@ -334,8 +310,6 @@ function HomeContent() {
           onNavigate={navigateToTab}
           onOpenCalendarPrep={openCalendarPrep}
           onOpenSetup={openSetup}
-          onConnectService={handleConnectService}
-          recentlyConnectedProvider={recentlyConnectedProvider}
           isSyncingLiveData={loading}
         />
       );
@@ -346,7 +320,6 @@ function HomeContent() {
         <CommunicationsView
           subView={communicationsSubView}
           onSubViewChange={handleCommunicationsSubViewChange}
-          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
         />
       );
@@ -355,7 +328,6 @@ function HomeContent() {
     if (activeTab === "people") {
       return (
         <PeopleHubView
-          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
         />
       );
@@ -366,7 +338,6 @@ function HomeContent() {
         <CalendarHubView
           activeSubView={calendarSubView}
           initialEventId={prepEventId}
-          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("focus")}
           onSubViewChange={handleCalendarSubViewChange}
           onOpenCalendarPrep={openCalendarPrep}
@@ -378,7 +349,6 @@ function HomeContent() {
       return (
         <PerformanceView
           activeSubView={performanceSubView}
-          onConnectService={handleConnectService}
           onOpenSetup={() => openSetup("connections")}
           onSubViewChange={handlePerformanceSubViewChange}
         />
@@ -388,7 +358,6 @@ function HomeContent() {
     return (
       <OperationsView
         activeSubView={operationsSubView}
-        onConnectService={handleConnectService}
         onOpenSetup={() => openSetup("connections")}
         onSubViewChange={handleOperationsSubViewChange}
       />
@@ -399,7 +368,6 @@ function HomeContent() {
     communicationsSubView,
     handleCalendarSubViewChange,
     handleCommunicationsSubViewChange,
-    handleConnectService,
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
     handleSetupComplete,
@@ -413,7 +381,6 @@ function HomeContent() {
     operationsSubView,
     performanceSubView,
     prepEventId,
-    recentlyConnectedProvider,
   ]);
 
   return (

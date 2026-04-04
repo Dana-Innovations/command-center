@@ -8,7 +8,6 @@ import { UnifiedPeopleView } from "@/components/views/UnifiedPeopleView";
 
 interface PeopleHubViewProps {
   onOpenSetup?: () => void;
-  onConnectService: (provider: string) => Promise<void>;
 }
 
 export function PeopleHubView({

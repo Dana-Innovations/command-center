@@ -10,14 +10,12 @@ import { SurfaceIntro, SurfaceSubnav } from "@/components/views/SurfaceChrome";
 
 interface PerformanceViewProps {
   activeSubView: PerformanceSubView;
-  onConnectService: (provider: string) => Promise<void>;
   onOpenSetup?: () => void;
   onSubViewChange: (subView: PerformanceSubView) => void;
 }
 
 export function PerformanceView({
   activeSubView,
-  onConnectService: _onConnectService,
   onOpenSetup,
   onSubViewChange,
 }: PerformanceViewProps) {
