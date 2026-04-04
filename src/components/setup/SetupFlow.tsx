@@ -8,6 +8,7 @@ import { M365ConfigPanel } from "@/components/setup/M365ConfigPanel";
 import { SlackConfigPanel } from "@/components/setup/SlackConfigPanel";
 import { AsanaConfigPanel } from "@/components/setup/AsanaConfigPanel";
 import { GenericConfigPanel } from "@/components/setup/GenericConfigPanel";
+import { useAttention } from "@/lib/attention/client";
 import type { ServiceId } from "@/lib/setup-flow";
 
 interface SetupFlowProps {
@@ -37,6 +38,8 @@ function LoadingSpinner() {
 }
 
 export function SetupFlow({ onComplete }: SetupFlowProps) {
+  const { onboardingCompleted } = useAttention();
+  const isReturning = onboardingCompleted;
   const {
     services,
     expandedService,
@@ -145,10 +148,12 @@ export function SetupFlow({ onComplete }: SetupFlowProps) {
         {/* Header */}
         <div className="mb-10">
           <h1 className="text-2xl font-semibold text-text-heading">
-            Set up your workspace
+            {isReturning ? "Connect your services" : "Set up your workspace"}
           </h1>
           <p className="mt-2 text-sm text-text-muted">
-            Connect your tools and choose what matters.
+            {isReturning
+              ? "Connect your tools to see your data in Command Center."
+              : "Connect your tools and choose what matters."}
           </p>
         </div>
 

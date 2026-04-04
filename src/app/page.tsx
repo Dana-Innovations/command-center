@@ -20,6 +20,7 @@ import { PerformanceView } from "@/components/views/PerformanceView";
 import { PeopleHubView } from "@/components/views/PeopleHubView";
 import { SetupFocusView } from "@/components/ui/WorkspaceStudio";
 import { SetupFlow } from "@/components/setup/SetupFlow";
+import { useConnections } from "@/hooks/useConnections";
 import { useTabBadges } from "@/hooks/useTabBadges";
 import { AttentionProvider, useAttention } from "@/lib/attention/client";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
@@ -86,6 +87,8 @@ function HomeContent() {
   const { loading, fetchedAt, error, refetch } = liveData;
   const delta = useDeltaFeed();
   const { focusRevision, openSetupFocus, onboardingCompleted } = useAttention();
+  const connections = useConnections();
+  const hasAnyConnection = connections.m365 || connections.asana || connections.slack || connections.salesforce || connections.powerbi || connections.monday;
   const badges = useTabBadges();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
@@ -300,7 +303,7 @@ function HomeContent() {
 
   const currentView = useMemo(() => {
     if (activeTab === "home") {
-      if (!onboardingCompleted) {
+      if (!onboardingCompleted || !hasAnyConnection) {
         return <SetupFlow onComplete={handleSetupComplete} />;
       }
       return homeSubView === "setup" ? (
@@ -371,6 +374,7 @@ function HomeContent() {
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
     handleSetupComplete,
+    hasAnyConnection,
     homeSubView,
     loading,
     navigateToTab,
