@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { MorningBrief } from "@/components/command-center/MorningBrief";
 import { AttentionHero } from "@/components/home/AttentionHero";
 import { QuickActions } from "@/components/home/QuickActions";
+import { SmartAgenda } from "@/components/home/SmartAgenda";
 import { HomeCommunications } from "@/components/home/HomeCommunications";
 import { HomeCalendar } from "@/components/home/HomeCalendar";
 import { HomeTasks } from "@/components/home/HomeTasks";
@@ -78,6 +79,13 @@ export function HomeView({
         />
         <QuickActions actions={data.quickActions} onAction={handleQuickAction} />
       </div>
+
+      {/* 2.5. Smart Daily Agenda — next 4 hours time-blocked */}
+      <SmartAgenda
+        onNavigate={onNavigate}
+        onOpenCalendarPrep={onOpenCalendarPrep}
+        animDelay={100}
+      />
 
       {/* 3. Morning Brief (collapsed by default) */}
       <div className="relative">
