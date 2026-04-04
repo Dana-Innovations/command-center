@@ -4,6 +4,10 @@ import { useCallback, useState } from "react";
 import { useSetupFlow } from "@/hooks/useSetupFlow";
 import { SetupServiceRow } from "@/components/setup/SetupServiceRow";
 import { SetupContinueBar } from "@/components/setup/SetupContinueBar";
+import { M365ConfigPanel } from "@/components/setup/M365ConfigPanel";
+import { SlackConfigPanel } from "@/components/setup/SlackConfigPanel";
+import { AsanaConfigPanel } from "@/components/setup/AsanaConfigPanel";
+import { GenericConfigPanel } from "@/components/setup/GenericConfigPanel";
 import type { ServiceId } from "@/lib/setup-flow";
 
 interface SetupFlowProps {
@@ -40,6 +44,7 @@ export function SetupFlow({ onComplete }: SetupFlowProps) {
     totalCount,
     loading,
     connectService,
+    saveServiceConfig,
     expandService,
     completeSetup,
   } = useSetupFlow();
@@ -69,6 +74,66 @@ export function SetupFlow({ onComplete }: SetupFlowProps) {
     },
     [connectService]
   );
+
+  const handleSaveConfig = useCallback(
+    (id: ServiceId) => async (config: Record<string, unknown>) => {
+      await saveServiceConfig(id, config);
+    },
+    [saveServiceConfig]
+  );
+
+  const handleSkipConfig = useCallback(
+    (id: ServiceId) => () => {
+      void saveServiceConfig(id, {});
+    },
+    [saveServiceConfig]
+  );
+
+  function renderConfigPanel(id: ServiceId) {
+    switch (id) {
+      case "m365":
+        return (
+          <M365ConfigPanel
+            onSave={handleSaveConfig(id)}
+            onSkip={handleSkipConfig(id)}
+          />
+        );
+      case "slack":
+        return (
+          <SlackConfigPanel
+            onSave={handleSaveConfig(id)}
+            onSkip={handleSkipConfig(id)}
+          />
+        );
+      case "asana":
+        return (
+          <AsanaConfigPanel
+            onSave={handleSaveConfig(id)}
+            onSkip={handleSkipConfig(id)}
+          />
+        );
+      case "powerbi":
+        return (
+          <GenericConfigPanel
+            serviceId={id}
+            title="Power BI"
+            onSave={handleSaveConfig(id)}
+            onSkip={handleSkipConfig(id)}
+          />
+        );
+      case "monday":
+        return (
+          <GenericConfigPanel
+            serviceId={id}
+            title="Monday.com"
+            onSave={handleSaveConfig(id)}
+            onSkip={handleSkipConfig(id)}
+          />
+        );
+      default:
+        return null;
+    }
+  }
 
   if (loading) {
     return <LoadingSpinner />;
@@ -104,9 +169,7 @@ export function SetupFlow({ onComplete }: SetupFlowProps) {
                 onExpand={() => expandService(entry.definition.id)}
                 onCollapse={() => expandService(null)}
               >
-                <div className="p-4 text-text-muted text-sm">
-                  Configuration coming soon...
-                </div>
+                {renderConfigPanel(entry.definition.id)}
               </SetupServiceRow>
             ))}
           </div>
@@ -129,9 +192,7 @@ export function SetupFlow({ onComplete }: SetupFlowProps) {
                 onExpand={() => expandService(entry.definition.id)}
                 onCollapse={() => expandService(null)}
               >
-                <div className="p-4 text-text-muted text-sm">
-                  Configuration coming soon...
-                </div>
+                {renderConfigPanel(entry.definition.id)}
               </SetupServiceRow>
             ))}
           </div>
