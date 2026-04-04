@@ -19,6 +19,7 @@ import { OperationsView } from "@/components/views/OperationsView";
 import { PerformanceView } from "@/components/views/PerformanceView";
 import { PeopleHubView } from "@/components/views/PeopleHubView";
 import { SetupFocusView } from "@/components/ui/WorkspaceStudio";
+import { SetupFlow } from "@/components/setup/SetupFlow";
 import { useTabBadges } from "@/hooks/useTabBadges";
 import { AttentionProvider, useAttention } from "@/lib/attention/client";
 import { LiveDataProvider, useLiveData } from "@/lib/live-data-context";
@@ -87,7 +88,7 @@ function HomeContent() {
   const liveData = useLiveData();
   const { loading, fetchedAt, error, refetch } = liveData;
   const delta = useDeltaFeed();
-  const { focusRevision, openSetupFocus, connectService } = useAttention();
+  const { focusRevision, openSetupFocus, connectService, onboardingCompleted } = useAttention();
   const badges = useTabBadges();
   const activeTab: TabId = parseTabId(searchParams.get("tab"));
   const homeSubView: HomeSubView = parseHomeSubView(searchParams.get("sub"));
@@ -255,6 +256,11 @@ function HomeContent() {
     [syncUrl]
   );
 
+  const handleSetupComplete = useCallback(async () => {
+    await refetch();
+    syncUrl({ tab: "home", sub: "overview" });
+  }, [refetch, syncUrl]);
+
   const handleConnectService = useCallback(
     async (provider: string) => {
       const connected = await connectService(provider);
@@ -318,6 +324,9 @@ function HomeContent() {
 
   const currentView = useMemo(() => {
     if (activeTab === "home") {
+      if (!onboardingCompleted) {
+        return <SetupFlow onComplete={handleSetupComplete} />;
+      }
       return homeSubView === "setup" ? (
         <SetupFocusView onBack={openHomeOverview} />
       ) : (
@@ -393,9 +402,11 @@ function HomeContent() {
     handleConnectService,
     handleOperationsSubViewChange,
     handlePerformanceSubViewChange,
+    handleSetupComplete,
     homeSubView,
     loading,
     navigateToTab,
+    onboardingCompleted,
     openCalendarPrep,
     openHomeOverview,
     openSetup,

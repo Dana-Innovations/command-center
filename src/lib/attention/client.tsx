@@ -434,6 +434,29 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       });
   }, [profile, refreshFocusMap, savePreferences, user]);
 
+  // Migrate localStorage onboarding flag to Supabase
+  useEffect(() => {
+    if (!profile || !user) return;
+    if (profile.settings?.onboarding?.workspace_studio_completed_at) return;
+
+    try {
+      const localFlag =
+        typeof window !== "undefined" &&
+        window.localStorage.getItem("cc-onboarding-completed") === "true";
+      if (localFlag) {
+        void savePreferences({
+          settings: {
+            onboarding: {
+              workspace_studio_completed_at: new Date().toISOString(),
+            },
+          },
+        });
+      }
+    } catch {
+      // Ignore localStorage access errors
+    }
+  }, [profile, savePreferences, user]);
+
   const openSetupFocus = useCallback((tab: SetupFocusTab = "focus") => {
     setSetupTab(tab);
   }, []);

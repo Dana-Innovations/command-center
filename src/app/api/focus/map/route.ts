@@ -603,6 +603,9 @@ function buildSlackTree(
           }
         );
 
+        const numMembers =
+          typeof channel.num_members === "number" ? channel.num_members : undefined;
+
         return {
           id: buildFocusPreferenceKey("slack", "slack_channel", id),
           provider: "slack" as const,
@@ -615,9 +618,11 @@ function buildSlackTree(
           importance: importance.importance,
           inheritedImportance: importance.inherited,
           connected: true,
+          counts: numMembers !== undefined ? { total: numMembers } : undefined,
           metadata: {
             channelName: label,
             isPrivate: Boolean(channel.is_private),
+            numMembers,
             type:
               typeof channel.type === "string" ? channel.type : "internal",
           },
