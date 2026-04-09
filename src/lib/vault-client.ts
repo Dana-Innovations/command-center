@@ -70,7 +70,8 @@ export async function searchVaultText(
   if (!client) return [];
 
   try {
-    const { data, error } = await client.rpc("search_vault_text", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (client as any).rpc("search_vault_text", {
       search_query: query,
       match_count: limit,
     });
@@ -157,7 +158,8 @@ export async function getVaultConnections(
   if (!client) return [];
 
   try {
-    const { data, error } = await client.rpc("get_connections", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (client as any).rpc("get_connections", {
       page_path: filePath,
     });
 

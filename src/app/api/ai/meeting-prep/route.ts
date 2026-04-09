@@ -7,6 +7,7 @@ import {
   buildBatchDossiers,
   serializeDossierForPrompt,
 } from "@/lib/relationship-dossier";
+import { hasVaultAccess, getVaultContext } from "@/lib/vault-client";
 
 interface MeetingPrepRequest {
   subject: string;
@@ -118,6 +119,22 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Enrich with Vault Graph organizational context
+  let vaultSection = "";
+  if (user && hasVaultAccess(user.email ?? "")) {
+    try {
+      const vaultContext = await getVaultContext(
+        attendeeNames,
+        subject ? [subject] : undefined
+      );
+      if (vaultContext) {
+        vaultSection = "\n\n" + vaultContext;
+      }
+    } catch (e) {
+      console.warn("[meeting-prep] vault enrichment failed:", e);
+    }
+  }
+
   const prompt = `You are an executive meeting prep researcher. Research and prepare a briefing for this meeting.
 
 Meeting: ${subject}
@@ -125,13 +142,14 @@ When: ${startTime} – ${endTime}
 Organizer: ${organizer || "Unknown"}
 Location: ${location || "Not specified"}
 
-${contextLines.length > 0 ? `Internal context from CRM and email:\n${contextLines.join("\n")}` : "No internal context available."}${relationshipSection}
+${contextLines.length > 0 ? `Internal context from CRM and email:\n${contextLines.join("\n")}` : "No internal context available."}${relationshipSection}${vaultSection}
 
 Instructions:
 1. Prioritize internal relationship data — the relationship intelligence above shows the user's actual history with each attendee. Use it to generate highly specific, personalized talking points.
-2. Search the web for each attendee and their company to find their current role, recent news, and relevant background.
-3. Search for any companies mentioned in the meeting subject or attendee affiliations for recent developments.
-4. Based on ALL gathered context (internal relationship data + CRM data + web research), generate:
+2. If Organizational Knowledge is provided, use it to understand each attendee's role, department, and connections within the organization. Reference specific initiatives, decisions, or intelligence when generating talking points.
+3. Search the web for each attendee and their company to find their current role, recent news, and relevant background.
+4. Search for any companies mentioned in the meeting subject or attendee affiliations for recent developments.
+5. Based on ALL gathered context (internal relationship data + CRM data + web research), generate:
    - A 2-3 sentence executive summary of what this meeting is likely about and how to approach it
    - Insights for each attendee (current role, company, relevant background)
    - Insights for each company involved (recent news, developments, market position)
