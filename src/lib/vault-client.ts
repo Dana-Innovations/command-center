@@ -91,6 +91,62 @@ export async function searchVaultText(
 }
 
 /**
+ * Look up a person by name in the Vault Graph.
+ * Matches: exact title, case-insensitive title, or frontmatter aliases.
+ * Returns null if not found or vault not configured.
+ */
+export async function getVaultPerson(
+  name: string
+): Promise<VaultPerson | null> {
+  const client = getVaultClient();
+  if (!client || !name.trim()) return null;
+
+  try {
+    // Try case-insensitive title match in company/people/
+    const { data, error } = await client
+      .from("vault_pages")
+      .select("file_path, title, content, frontmatter, tags, wikilinks, backlinks")
+      .eq("type", "person")
+      .eq("folder", "company/people")
+      .ilike("title", name.trim())
+      .single();
+
+    if (error || !data) {
+      // Fallback: search by alias in frontmatter
+      const { data: aliasData } = await client
+        .from("vault_pages")
+        .select("file_path, title, content, frontmatter, tags, wikilinks, backlinks")
+        .eq("folder", "company/people")
+        .contains("frontmatter", { aliases: [name.trim()] })
+        .limit(1)
+        .single();
+
+      if (!aliasData) return null;
+      return formatVaultPerson(aliasData);
+    }
+
+    return formatVaultPerson(data);
+  } catch (e) {
+    console.warn("[vault-client] getVaultPerson failed:", e);
+    return null;
+  }
+}
+
+function formatVaultPerson(row: Record<string, unknown>): VaultPerson {
+  const frontmatter = (row.frontmatter as Record<string, unknown>) ?? {};
+  const content = (row.content as string) ?? "";
+  return {
+    file_path: row.file_path as string,
+    title: row.title as string,
+    department: (frontmatter.department as string) ?? null,
+    frontmatter,
+    wikilinks: (row.wikilinks as string[]) ?? [],
+    backlinks: (row.backlinks as string[]) ?? [],
+    contentSummary: content.slice(0, 500),
+  };
+}
+
+/**
  * Fetch a vault page by title and folder.
  * Returns the page content string, or null if not found or vault not configured.
  */
