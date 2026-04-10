@@ -40,16 +40,19 @@ import {
   type SetupFocusTab,
   type TabId,
 } from "@/lib/tab-config";
+import { VaultCaptureProvider } from "@/components/modals/VaultCaptureProvider";
 
 export default function Home() {
   return (
-    <LiveDataProvider>
-      <AttentionProvider>
-        <Suspense fallback={<HomeShellFallback />}>
-          <HomeContent />
-        </Suspense>
-      </AttentionProvider>
-    </LiveDataProvider>
+    <VaultCaptureProvider>
+      <LiveDataProvider>
+        <AttentionProvider>
+          <Suspense fallback={<HomeShellFallback />}>
+            <HomeContent />
+          </Suspense>
+        </AttentionProvider>
+      </LiveDataProvider>
+    </VaultCaptureProvider>
   );
 }
 
