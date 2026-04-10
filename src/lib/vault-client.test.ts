@@ -321,3 +321,267 @@ describe("getVaultContext", () => {
     expect(context!.length).toBeLessThan(9000);
   });
 });
+
+describe("createVaultPage", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("VAULT_SUPABASE_URL", "https://test.supabase.co");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "test-key");
+    vi.resetModules();
+  });
+
+  it("inserts a new vault page row and returns the file path", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const mockInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockFrom = vi.fn(() => ({ insert: mockInsert }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { createVaultPage } = await import("@/lib/vault-client");
+    const result = await createVaultPage({
+      file_path: "company/intelligence/captures/2026-04-10-test.md",
+      title: "Test Capture",
+      content: "## Captured 2026-04-10\n\nHello",
+      frontmatter: { type: "capture", source: "cortex-capture" },
+      tags: ["capture"],
+      wikilinks: ["debbie-michelle"],
+      folder: "company/intelligence/captures",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.filePath).toBe("company/intelligence/captures/2026-04-10-test.md");
+    }
+    expect(mockFrom).toHaveBeenCalledWith("vault_pages");
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    const insertedRow = mockInsert.mock.calls[0][0];
+    expect(insertedRow.source).toBe("cortex-capture");
+    expect(insertedRow.checksum).toBeDefined();
+    expect(typeof insertedRow.checksum).toBe("string");
+  });
+
+  it("returns error when vault is not configured", async () => {
+    vi.stubEnv("VAULT_SUPABASE_URL", "");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "");
+    vi.resetModules();
+
+    const { createVaultPage } = await import("@/lib/vault-client");
+    const result = await createVaultPage({
+      file_path: "company/intelligence/captures/test.md",
+      title: "Test",
+      content: "hello",
+      frontmatter: {},
+      tags: [],
+      wikilinks: [],
+      folder: "company/intelligence/captures",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("not configured");
+    }
+  });
+
+  it("returns error when insert fails", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const mockInsert = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "duplicate key" },
+    });
+    const mockFrom = vi.fn(() => ({ insert: mockInsert }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { createVaultPage } = await import("@/lib/vault-client");
+    const result = await createVaultPage({
+      file_path: "company/intelligence/captures/test.md",
+      title: "Test",
+      content: "hello",
+      frontmatter: {},
+      tags: [],
+      wikilinks: [],
+      folder: "company/intelligence/captures",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("duplicate key");
+    }
+  });
+});
+
+describe("checkVaultPageExists", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("VAULT_SUPABASE_URL", "https://test.supabase.co");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "test-key");
+    vi.resetModules();
+  });
+
+  it("returns true when page exists", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const mockMaybeSingle = vi.fn().mockResolvedValue({
+      data: { file_path: "company/people/debbie-michelle.md" },
+      error: null,
+    });
+    const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
+    const mockSelect = vi.fn(() => ({ eq: mockEq }));
+    const mockFrom = vi.fn(() => ({ select: mockSelect }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { checkVaultPageExists } = await import("@/lib/vault-client");
+    const exists = await checkVaultPageExists("company/people/debbie-michelle.md");
+    expect(exists).toBe(true);
+  });
+
+  it("returns false when page does not exist", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
+    const mockSelect = vi.fn(() => ({ eq: mockEq }));
+    const mockFrom = vi.fn(() => ({ select: mockSelect }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { checkVaultPageExists } = await import("@/lib/vault-client");
+    const exists = await checkVaultPageExists("company/people/nobody.md");
+    expect(exists).toBe(false);
+  });
+
+  it("returns false when vault is not configured", async () => {
+    vi.stubEnv("VAULT_SUPABASE_URL", "");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "");
+    vi.resetModules();
+
+    const { checkVaultPageExists } = await import("@/lib/vault-client");
+    const exists = await checkVaultPageExists("anything.md");
+    expect(exists).toBe(false);
+  });
+});
+
+describe("appendToVaultPage", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("VAULT_SUPABASE_URL", "https://test.supabase.co");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "test-key");
+    vi.resetModules();
+  });
+
+  it("appends a section to existing content with --- separator", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const existingRow = {
+      content: "# Debbie Michelle\n\nOriginal content.",
+      wikilinks: ["derick-dahl"],
+      source: "obsidian",
+    };
+
+    const mockSelectSingle = vi.fn().mockResolvedValue({ data: existingRow, error: null });
+    const mockSelectEq = vi.fn(() => ({ maybeSingle: mockSelectSingle }));
+    const mockSelect = vi.fn(() => ({ eq: mockSelectEq }));
+
+    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockUpdate = vi.fn(() => ({ eq: mockUpdateEq }));
+
+    const mockFrom = vi.fn(() => ({ select: mockSelect, update: mockUpdate }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { appendToVaultPage } = await import("@/lib/vault-client");
+    const result = await appendToVaultPage(
+      "company/people/debbie-michelle.md",
+      "## Captured 2026-04-10\n\nNew update.",
+      ["alex-birch"]
+    );
+
+    expect(result.ok).toBe(true);
+
+    const updatedFields = mockUpdate.mock.calls[0][0];
+    expect(updatedFields.content).toBe(
+      "# Debbie Michelle\n\nOriginal content.\n\n---\n\n## Captured 2026-04-10\n\nNew update."
+    );
+    expect(updatedFields.wikilinks).toEqual(
+      expect.arrayContaining(["derick-dahl", "alex-birch"])
+    );
+    expect(updatedFields.wikilinks).toHaveLength(2);
+    expect(updatedFields.source).toBeUndefined();
+    expect(updatedFields.checksum).toBeDefined();
+    expect(updatedFields.updated_at).toBeDefined();
+  });
+
+  it("deduplicates wikilinks when merging", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const existingRow = {
+      content: "existing",
+      wikilinks: ["alex-birch", "derick-dahl"],
+      source: "obsidian",
+    };
+
+    const mockSelectSingle = vi.fn().mockResolvedValue({ data: existingRow, error: null });
+    const mockSelectEq = vi.fn(() => ({ maybeSingle: mockSelectSingle }));
+    const mockSelect = vi.fn(() => ({ eq: mockSelectEq }));
+    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockUpdate = vi.fn(() => ({ eq: mockUpdateEq }));
+    const mockFrom = vi.fn(() => ({ select: mockSelect, update: mockUpdate }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { appendToVaultPage } = await import("@/lib/vault-client");
+    await appendToVaultPage("path.md", "new", ["alex-birch", "debbie-michelle"]);
+
+    const updatedFields = mockUpdate.mock.calls[0][0];
+    expect(updatedFields.wikilinks.sort()).toEqual(
+      ["alex-birch", "debbie-michelle", "derick-dahl"]
+    );
+  });
+
+  it("returns error when page does not exist", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const mockSelectSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockSelectEq = vi.fn(() => ({ maybeSingle: mockSelectSingle }));
+    const mockSelect = vi.fn(() => ({ eq: mockSelectEq }));
+    const mockFrom = vi.fn(() => ({ select: mockSelect, update: vi.fn() }));
+    (createClient as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: mockFrom,
+      rpc: vi.fn(),
+    });
+
+    const { appendToVaultPage } = await import("@/lib/vault-client");
+    const result = await appendToVaultPage("nonexistent.md", "content", []);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("not found");
+    }
+  });
+
+  it("returns error when vault is not configured", async () => {
+    vi.stubEnv("VAULT_SUPABASE_URL", "");
+    vi.stubEnv("VAULT_SUPABASE_SERVICE_ROLE_KEY", "");
+    vi.resetModules();
+
+    const { appendToVaultPage } = await import("@/lib/vault-client");
+    const result = await appendToVaultPage("x.md", "content", []);
+
+    expect(result.ok).toBe(false);
+  });
+});

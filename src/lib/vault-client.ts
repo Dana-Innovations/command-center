@@ -28,6 +28,22 @@ export interface VaultConnection {
   connected_tags: string[] | null;
 }
 
+// ── Write Types ───────────────────────────────────────────────────────────
+
+export interface VaultPageInsert {
+  file_path: string;
+  title: string;
+  content: string;
+  frontmatter: Record<string, unknown>;
+  tags: string[];
+  wikilinks: string[];
+  folder: string;
+}
+
+export type VaultWriteResult =
+  | { ok: true; filePath: string }
+  | { ok: false; error: string };
+
 // ── Access Gating ─────────────────────────────────────────────────────────
 
 export function hasVaultAccess(userEmail: string): boolean {
@@ -304,6 +320,135 @@ function formatVaultContext(
   }
 
   return output;
+}
+
+// ── Write Functions ───────────────────────────────────────────────────────
+
+async function computeChecksum(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Insert a new page into the Vault Graph.
+ * Computes checksum, sets source to 'cortex-capture'.
+ */
+export async function createVaultPage(
+  page: VaultPageInsert
+): Promise<VaultWriteResult> {
+  const client = getVaultClient();
+  if (!client) return { ok: false, error: "Vault not configured" };
+
+  try {
+    const checksum = await computeChecksum(page.content);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (client as any).from("vault_pages").insert({
+      file_path: page.file_path,
+      title: page.title,
+      content: page.content,
+      frontmatter: page.frontmatter,
+      tags: page.tags,
+      wikilinks: page.wikilinks,
+      backlinks: [],
+      folder: page.folder,
+      source: "cortex-capture",
+      checksum,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, filePath: page.file_path };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.warn("[vault-client] createVaultPage failed:", message);
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Check if a vault page exists at the given file_path.
+ * Returns false when vault is unconfigured or on any error.
+ */
+export async function checkVaultPageExists(filePath: string): Promise<boolean> {
+  const client = getVaultClient();
+  if (!client) return false;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (client as any)
+      .from("vault_pages")
+      .select("file_path")
+      .eq("file_path", filePath)
+      .maybeSingle();
+    return data !== null;
+  } catch (e) {
+    console.warn("[vault-client] checkVaultPageExists failed:", e);
+    return false;
+  }
+}
+
+/**
+ * Append a new section to an existing vault page.
+ * Uses `---` separator. Merges wikilinks as union. Does NOT modify source field.
+ * Returns error if page doesn't exist.
+ */
+export async function appendToVaultPage(
+  filePath: string,
+  section: string,
+  newWikilinks: string[]
+): Promise<VaultWriteResult> {
+  const client = getVaultClient();
+  if (!client) return { ok: false, error: "Vault not configured" };
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing, error: fetchError } = await (client as any)
+      .from("vault_pages")
+      .select("content, wikilinks, source")
+      .eq("file_path", filePath)
+      .maybeSingle();
+
+    if (fetchError) {
+      return { ok: false, error: fetchError.message };
+    }
+    if (!existing) {
+      return { ok: false, error: `Page not found: ${filePath}` };
+    }
+
+    const existingContent = (existing.content as string) ?? "";
+    const existingLinks = (existing.wikilinks as string[]) ?? [];
+
+    const mergedContent = `${existingContent}\n\n---\n\n${section}`;
+    const mergedWikilinks = Array.from(
+      new Set([...existingLinks, ...newWikilinks])
+    );
+    const newChecksum = await computeChecksum(mergedContent);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (client as any)
+      .from("vault_pages")
+      .update({
+        content: mergedContent,
+        wikilinks: mergedWikilinks,
+        checksum: newChecksum,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("file_path", filePath);
+
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+    return { ok: true, filePath };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.warn("[vault-client] appendToVaultPage failed:", message);
+    return { ok: false, error: message };
+  }
 }
 
 /**
