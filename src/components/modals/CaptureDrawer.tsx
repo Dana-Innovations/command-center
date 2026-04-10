@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import type { UseVaultCaptureReturn } from "@/hooks/useVaultCapture";
@@ -13,35 +13,50 @@ interface CaptureDrawerProps {
 export function CaptureDrawer({ capture }: CaptureDrawerProps) {
   const { state, isOpen, close, save, retry } = capture;
   const { addToast } = useToast();
-  const [editedPlan, setEditedPlan] = useState<RoutingPlan | null>(null);
 
-  // Sync edited plan when entering preview state
-  useEffect(() => {
-    if (state.status === "preview") {
-      setEditedPlan(state.plan);
-    } else if (state.status === "error" && state.plan) {
-      setEditedPlan(state.plan);
-    }
-  }, [state]);
+  // Holds the latest user-edited plan without causing re-renders.
+  // PreviewForm notifies us on every change via onPlanChange.
+  const editedPlanRef = useRef<RoutingPlan | null>(null);
 
-  // Fire success toast when returning to closed state after save
-  const [wasSaving, setWasSaving] = useState(false);
+  // Track last-saved title so we can show it in the toast after the drawer closes.
+  const lastSavedTitleRef = useRef<string | null>(null);
+
+  // Detect saving → closed transition using a prev-status ref (no setState in effect).
+  const prevStatusRef = useRef(state.status);
   useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = state.status;
+
+    // Capture title on entering "saving" (state.plan is already the edited plan).
     if (state.status === "saving") {
-      setWasSaving(true);
-      return;
+      lastSavedTitleRef.current = state.plan.targetTitle;
     }
-    if (wasSaving && state.status === "closed" && editedPlan) {
-      addToast(`Saved to ${editedPlan.targetTitle}`, "success");
-      setWasSaving(false);
-      return;
+
+    if (prev === "saving" && state.status === "closed" && lastSavedTitleRef.current) {
+      addToast(`Saved to ${lastSavedTitleRef.current}`, "success");
+      lastSavedTitleRef.current = null;
     }
-    if (state.status !== "closed") {
-      setWasSaving(false);
-    }
-  }, [state.status, wasSaving, editedPlan, addToast]);
+  }, [state, addToast]);
 
   if (!isOpen) return null;
+
+  // A stable key based on plan identity causes PreviewForm to remount (and reset
+  // its local edit state) when a genuinely different plan arrives.
+  const planKey =
+    state.status === "preview" || state.status === "saving" || state.status === "error"
+      ? (state.plan?.targetPath ?? "no-plan")
+      : "no-plan";
+
+  const hasPlan =
+    (state.status === "preview" ||
+      state.status === "saving" ||
+      state.status === "error") &&
+    !!state.plan;
+
+  function handleSave() {
+    const plan = editedPlanRef.current;
+    if (plan) save(plan);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end pointer-events-none">
@@ -77,10 +92,11 @@ export function CaptureDrawer({ capture }: CaptureDrawerProps) {
           )}
 
           {(state.status === "preview" || state.status === "saving") &&
-            editedPlan && (
+            state.plan && (
               <PreviewForm
-                plan={editedPlan}
-                onChange={setEditedPlan}
+                key={planKey}
+                initialPlan={state.plan}
+                onPlanChange={(p) => { editedPlanRef.current = p; }}
                 saving={state.status === "saving"}
               />
             )}
@@ -90,10 +106,11 @@ export function CaptureDrawer({ capture }: CaptureDrawerProps) {
               <div className="text-sm text-accent-red bg-accent-red/10 border border-accent-red/30 rounded p-3">
                 {state.error}
               </div>
-              {editedPlan && (
+              {state.plan && (
                 <PreviewForm
-                  plan={editedPlan}
-                  onChange={setEditedPlan}
+                  key={planKey}
+                  initialPlan={state.plan}
+                  onPlanChange={(p) => { editedPlanRef.current = p; }}
                   saving={false}
                 />
               )}
@@ -108,7 +125,7 @@ export function CaptureDrawer({ capture }: CaptureDrawerProps) {
           >
             Cancel
           </button>
-          {state.status === "error" && !editedPlan && (
+          {state.status === "error" && !state.plan && (
             <button
               onClick={retry}
               className="px-3 py-1.5 text-xs bg-accent-amber/20 text-accent-amber rounded hover:bg-accent-amber/30"
@@ -116,22 +133,19 @@ export function CaptureDrawer({ capture }: CaptureDrawerProps) {
               Try Again
             </button>
           )}
-          {(state.status === "preview" ||
-            state.status === "error" ||
-            state.status === "saving") &&
-            editedPlan && (
-              <button
-                onClick={() => editedPlan && save(editedPlan)}
-                disabled={state.status === "saving"}
-                className={cn(
-                  "px-3 py-1.5 text-xs rounded font-semibold",
-                  "bg-accent-amber/20 text-accent-amber hover:bg-accent-amber/30",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                {state.status === "saving" ? "Saving..." : "Save to Vault"}
-              </button>
-            )}
+          {hasPlan && (
+            <button
+              onClick={handleSave}
+              disabled={state.status === "saving"}
+              className={cn(
+                "px-3 py-1.5 text-xs rounded font-semibold",
+                "bg-accent-amber/20 text-accent-amber hover:bg-accent-amber/30",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {state.status === "saving" ? "Saving..." : "Save to Vault"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -139,12 +153,28 @@ export function CaptureDrawer({ capture }: CaptureDrawerProps) {
 }
 
 interface PreviewFormProps {
-  plan: RoutingPlan;
-  onChange: (plan: RoutingPlan) => void;
+  initialPlan: RoutingPlan;
+  onPlanChange: (plan: RoutingPlan) => void;
   saving: boolean;
 }
 
-function PreviewForm({ plan, onChange, saving }: PreviewFormProps) {
+function PreviewForm({ initialPlan, onPlanChange, saving }: PreviewFormProps) {
+  // Local edit state — resets naturally when the component remounts via key prop.
+  const [plan, setPlan] = useState<RoutingPlan>(initialPlan);
+
+  // Notify parent of the initial plan on mount so editedPlanRef is always valid.
+  const onPlanChangeRef = useRef(onPlanChange);
+  onPlanChangeRef.current = onPlanChange;
+  useEffect(() => {
+    onPlanChangeRef.current(initialPlan);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs only on mount
+
+  function update(next: RoutingPlan) {
+    setPlan(next);
+    onPlanChangeRef.current(next);
+  }
+
   return (
     <div className="space-y-4">
       <Field label="Action">
@@ -157,7 +187,7 @@ function PreviewForm({ plan, onChange, saving }: PreviewFormProps) {
         <input
           type="text"
           value={plan.targetTitle}
-          onChange={(e) => onChange({ ...plan, targetTitle: e.target.value })}
+          onChange={(e) => update({ ...plan, targetTitle: e.target.value })}
           disabled={saving}
           className="w-full px-2 py-1 text-sm bg-[var(--bg-card)] border border-[var(--bg-card-border)] rounded text-text-body"
         />
@@ -204,7 +234,7 @@ function PreviewForm({ plan, onChange, saving }: PreviewFormProps) {
         <textarea
           value={plan.formattedContent}
           onChange={(e) =>
-            onChange({ ...plan, formattedContent: e.target.value })
+            update({ ...plan, formattedContent: e.target.value })
           }
           disabled={saving}
           rows={12}
