@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { cn, getCurrentPSTHour } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CaptureButton } from "@/components/ui/CaptureButton";
+import { useVaultCaptureContext } from "@/components/modals/VaultCaptureProvider";
 
 interface CalEvent {
   time: string;
@@ -27,6 +29,7 @@ interface CalendarTimelineProps {
 }
 
 export function CalendarTimeline({ events = [] }: CalendarTimelineProps) {
+  const { open: openCapture } = useVaultCaptureContext();
   const [currentH, setCurrentH] = useState(getCurrentPSTHour);
 
   useEffect(() => {
@@ -87,6 +90,18 @@ export function CalendarTimeline({ events = [] }: CalendarTimelineProps) {
                   {currentH >= ev.startH && currentH < ev.endH && (
                     <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Happening now">●</span>
                   )}
+                  <CaptureButton
+                    compact
+                    content={`${ev.title}${ev.meta ? ` — ${ev.meta}` : ""}`}
+                    sourceType="calendar"
+                    sourceMeta={{
+                      from: ev.meta || undefined,
+                      subject: ev.title,
+                      timestamp: new Date().toISOString(),
+                      url: ev.url || undefined,
+                    }}
+                    onCapture={openCapture}
+                  />
                 </div>
                 <div className="text-xs text-text-muted">{ev.meta}</div>
 
