@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { CaptureButton } from "@/components/ui/CaptureButton";
+import { useVaultCaptureContext } from "@/components/modals/VaultCaptureProvider";
 
 interface EmailSender {
   id: string;
@@ -17,6 +19,7 @@ interface EmailHygieneProps {
 export function EmailHygiene({ senders = [] }: EmailHygieneProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const { open: openCapture } = useVaultCaptureContext();
 
   const visible = senders.filter((s) => !removedIds.has(s.id));
 
@@ -94,6 +97,17 @@ export function EmailHygiene({ senders = [] }: EmailHygieneProps) {
                         <div className="text-xs text-text-muted truncate">{sender.email}</div>
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        <CaptureButton
+                          compact
+                          content={`${sender.name} <${sender.email}> — ${sender.group}`}
+                          sourceType="email"
+                          sourceMeta={{
+                            from: sender.name || sender.email,
+                            subject: `Email sender: ${sender.name}`,
+                            timestamp: new Date().toISOString(),
+                          }}
+                          onCapture={openCapture}
+                        />
                         <button
                           className="text-[10px] px-2 py-0.5 rounded-md hover:bg-accent-red/20 text-text-muted hover:text-accent-red transition-colors cursor-pointer"
                           onClick={() => handleAction(sender.id)}
