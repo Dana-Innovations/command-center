@@ -6,10 +6,42 @@ import { AttentionFeedbackControl } from "@/components/ui/AttentionFeedbackContr
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ServiceIcon } from "@/components/ui/ServiceIcon";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { CaptureButton } from "@/components/ui/CaptureButton";
+import { useVaultCaptureContext } from "@/components/modals/VaultCaptureProvider";
 import type { TabId } from "@/lib/tab-config";
 import type { CommunicationCardItem } from "./useHomeData";
+import type {
+  CaptureSourceType,
+  CaptureSourceMeta,
+} from "@/lib/capture-routing";
 
 /* ── Helpers ── */
+
+function itemToCaptureMeta(item: CommunicationCardItem): {
+  content: string;
+  sourceType: CaptureSourceType;
+  sourceMeta: CaptureSourceMeta;
+} {
+  const sourceType: CaptureSourceType =
+    item.kind === "email"
+      ? "email"
+      : item.kind === "chat"
+        ? "teams"
+        : item.kind === "slack"
+          ? "slack"
+          : "asana";
+
+  return {
+    content: item.preview || item.title,
+    sourceType,
+    sourceMeta: {
+      from: item.meta.split(" · ")[0],
+      subject: item.title,
+      timestamp: new Date(item.timestamp).toISOString(),
+      url: item.url ?? undefined,
+    },
+  };
+}
 
 function sourceLabel(item: CommunicationCardItem): string | null {
   if (item.kind === "chat") {
@@ -34,7 +66,7 @@ function heatIntensity(score: number, base: number, range: number): number {
 
 /* ── Tier Components ── */
 
-function ActNowCard({ item }: { item: CommunicationCardItem }) {
+function ActNowCard({ item, onCapture }: { item: CommunicationCardItem; onCapture: Parameters<typeof CaptureButton>[0]["onCapture"] }) {
   const intensity = heatIntensity(item.score, 60, 40);
   const CardWrapper = item.url ? "a" : "div";
   const linkProps = item.url
@@ -66,17 +98,31 @@ function ActNowCard({ item }: { item: CommunicationCardItem }) {
             {item.preview}
           </p>
         </div>
-        <AttentionFeedbackControl
-          target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
-          surface="home"
-          compact
-        />
+        <div className="flex shrink-0 items-center gap-1">
+          {(() => {
+            const cap = itemToCaptureMeta(item);
+            return (
+              <CaptureButton
+                compact
+                content={cap.content}
+                sourceType={cap.sourceType}
+                sourceMeta={cap.sourceMeta}
+                onCapture={onCapture}
+              />
+            );
+          })()}
+          <AttentionFeedbackControl
+            target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
+            surface="home"
+            compact
+          />
+        </div>
       </div>
     </CardWrapper>
   );
 }
 
-function FollowUpCard({ item }: { item: CommunicationCardItem }) {
+function FollowUpCard({ item, onCapture }: { item: CommunicationCardItem; onCapture: Parameters<typeof CaptureButton>[0]["onCapture"] }) {
   const intensity = heatIntensity(item.score, 30, 40);
   const age = agingLabel(item);
   const CardWrapper = item.url ? "a" : "div";
@@ -114,17 +160,31 @@ function FollowUpCard({ item }: { item: CommunicationCardItem }) {
             </span>
           )}
         </div>
-        <AttentionFeedbackControl
-          target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
-          surface="home"
-          compact
-        />
+        <div className="flex shrink-0 items-center gap-1">
+          {(() => {
+            const cap = itemToCaptureMeta(item);
+            return (
+              <CaptureButton
+                compact
+                content={cap.content}
+                sourceType={cap.sourceType}
+                sourceMeta={cap.sourceMeta}
+                onCapture={onCapture}
+              />
+            );
+          })()}
+          <AttentionFeedbackControl
+            target={item.attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
+            surface="home"
+            compact
+          />
+        </div>
       </div>
     </CardWrapper>
   );
 }
 
-function AwareRow({ item }: { item: CommunicationCardItem }) {
+function AwareRow({ item, onCapture }: { item: CommunicationCardItem; onCapture: Parameters<typeof CaptureButton>[0]["onCapture"] }) {
   const label = sourceLabel(item);
   const CardWrapper = item.url ? "a" : "div";
   const linkProps = item.url
@@ -143,6 +203,18 @@ function AwareRow({ item }: { item: CommunicationCardItem }) {
       <span className="text-[11px] text-text-muted shrink-0">{item.meta.split(" · ")[0]}</span>
       <span className="text-[11px] text-text-muted opacity-40 shrink-0">&middot;</span>
       <span className="text-[12px] text-text-body truncate">{item.title}</span>
+      {(() => {
+        const cap = itemToCaptureMeta(item);
+        return (
+          <CaptureButton
+            compact
+            content={cap.content}
+            sourceType={cap.sourceType}
+            sourceMeta={cap.sourceMeta}
+            onCapture={onCapture}
+          />
+        );
+      })()}
     </CardWrapper>
   );
 }
@@ -192,6 +264,7 @@ export function HomeCommunications({
   onNavigate,
   animDelay = 160,
 }: HomeCommunicationsProps) {
+  const { open: openCapture } = useVaultCaptureContext();
   const filtered = items.filter((item) => !heroItemIds.has(item.id));
 
   const { actNow, followUp, aware } = useMemo(() => {
@@ -237,7 +310,7 @@ export function HomeCommunications({
               <TierHeader label="Act Now" count={actNow.length} color="amber" />
               <div className="grid gap-3 lg:grid-cols-2">
                 {actNow.map((item) => (
-                  <ActNowCard key={item.id} item={item} />
+                  <ActNowCard key={item.id} item={item} onCapture={openCapture} />
                 ))}
               </div>
             </div>
@@ -253,7 +326,7 @@ export function HomeCommunications({
               <TierHeader label="Follow Up" count={followUp.length} color="teal" />
               <div className="grid gap-3 lg:grid-cols-2">
                 {followUp.map((item) => (
-                  <FollowUpCard key={item.id} item={item} />
+                  <FollowUpCard key={item.id} item={item} onCapture={openCapture} />
                 ))}
               </div>
             </div>
@@ -265,7 +338,7 @@ export function HomeCommunications({
               <TierHeader label="Stay Aware" count={aware.length} color="muted" />
               <div className="space-y-0.5">
                 {aware.map((item) => (
-                  <AwareRow key={item.id} item={item} />
+                  <AwareRow key={item.id} item={item} onCapture={openCapture} />
                 ))}
               </div>
             </div>
