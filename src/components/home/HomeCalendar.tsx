@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { AttentionFeedbackControl } from "@/components/ui/AttentionFeedbackControl";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CaptureButton } from "@/components/ui/CaptureButton";
+import { useVaultCaptureContext } from "@/components/modals/VaultCaptureProvider";
 import type { TabId } from "@/lib/tab-config";
 import { CollapsibleSection } from "./CollapsibleSection";
 
@@ -53,6 +55,7 @@ export function HomeCalendar({
   onOpenCalendarPrep,
   animDelay = 200,
 }: HomeCalendarProps) {
+  const { open: openCapture } = useVaultCaptureContext();
   const filtered = events.filter((item) => !heroItemIds.has(`cal-${item.event.id}`));
 
   return (
@@ -107,6 +110,18 @@ export function HomeCalendar({
                     Join
                   </a>
                 )}
+                <CaptureButton
+                  compact
+                  content={`${event.subject}${event.location ? ` at ${event.location}` : ""}`}
+                  sourceType="calendar"
+                  sourceMeta={{
+                    from: event.organizer ?? undefined,
+                    subject: event.subject,
+                    timestamp: event.start_time,
+                    url: event.join_url ?? undefined,
+                  }}
+                  onCapture={openCapture}
+                />
               </div>
             </div>
           ))}
