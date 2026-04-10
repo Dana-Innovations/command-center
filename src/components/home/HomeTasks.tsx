@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { AttentionFeedbackControl } from "@/components/ui/AttentionFeedbackControl";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CaptureButton } from "@/components/ui/CaptureButton";
+import { useVaultCaptureContext } from "@/components/modals/VaultCaptureProvider";
 import type { TabId } from "@/lib/tab-config";
 import { CollapsibleSection } from "./CollapsibleSection";
 
@@ -40,6 +42,7 @@ export function HomeTasks({
   onNavigate,
   animDelay = 240,
 }: HomeTasksProps) {
+  const { open: openCapture } = useVaultCaptureContext();
   const filtered = tasks.filter((item) => !heroItemIds.has(`task-${item.task.id}`));
 
   return (
@@ -81,11 +84,25 @@ export function HomeTasks({
                         : "No due date"}
                   </p>
                 </div>
-                <AttentionFeedbackControl
-                  target={attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
-                  surface="home"
-                  compact
-                />
+                <div className="flex shrink-0 items-center gap-1">
+                  <CaptureButton
+                    compact
+                    content={task.name}
+                    sourceType="asana"
+                    sourceMeta={{
+                      from: task.project_name || "Asana",
+                      subject: task.name,
+                      timestamp: new Date().toISOString(),
+                      url: task.permalink_url,
+                    }}
+                    onCapture={openCapture}
+                  />
+                  <AttentionFeedbackControl
+                    target={attentionTarget as Parameters<typeof AttentionFeedbackControl>[0]["target"]}
+                    surface="home"
+                    compact
+                  />
+                </div>
               </div>
             </a>
           ))}
